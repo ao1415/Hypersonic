@@ -2,21 +2,34 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <stack>
+#include <queue>
 
 using namespace std;
 
 const char Cell = '.';
-const char Box = '0';
+const char EmptyBox = '0';
+const char RangeBox = '1';
+const char ExtraBox = '2';
+const char Wall = 'X';
 
 const int Player = 0;
 const int Bomb = 1;
+const int Item = 2;
 
 const string CMove = "MOVE ";
 const string CBomb = "BOMB ";
 
 enum class Table {
 	Cell,
-	Box,
+	/// <summary>空</summary>
+	EmptyBox,
+	/// <summary>爆風アップアイテム入り</summary>
+	RangeBox,
+	/// <summary>ボム追加アイテム入り</summary>
+	ExtraBox,
+	/// <summary>壁</summary>
+	Wall,
 	Size
 };
 
@@ -43,12 +56,11 @@ struct Point {
 
 struct Entitie {
 
-	Entitie() : Entitie(false, Point(), 0, 0) {}
-	Entitie(const bool f, const Point& p, const int v1, const int v2) {
-		flag = f; point = p; val1 = v1; val2 = v2;
+	Entitie() : Entitie(Point(), 0, 0) {}
+	Entitie(const Point& p, const int v1, const int v2) {
+		point = p; val1 = v1; val2 = v2;
 	}
 
-	bool flag;
 	Point point;
 	int val1;
 	int val2;
@@ -71,8 +83,12 @@ public:
 	static const Table Stage(const Point& p) { return stage[p.x][p.y]; }
 	static const Entitie My() { return my; }
 	static const Entitie En() { return en; }
-	static const Entitie MyB() { return myB; }
-	static const Entitie EnB() { return enB; }
+	static const vector<Entitie> MyB() { return myB; }
+	static const Entitie MyB(const size_t n) { return myB[n]; }
+	static const vector<Entitie> EnB() { return enB; }
+	static const Entitie EnB(const size_t n) { return enB[n]; }
+	static const vector<Entitie> Item() { return item; }
+	static const Entitie Item(const size_t n) { return item[n]; }
 
 private:
 
@@ -83,27 +99,20 @@ private:
 	static StageArray stage;
 	static Entitie my;
 	static Entitie en;
-	static Entitie myB;
-	static Entitie enB;
+	static vector<Entitie> myB;
+	static vector<Entitie> enB;
+
+	static vector<Entitie> item;
 
 	static void EntitieReset() {
 		my = Entitie();
 		en = Entitie();
-		myB = Entitie();
-		enB = Entitie();
+		myB.clear();
+		enB.clear();
+		item.clear();
 	}
 
 };
-
-int Share::width;
-int Share::height;
-int Share::myId;
-
-StageArray Share::stage;
-Entitie Share::my;
-Entitie Share::en;
-Entitie Share::myB;
-Entitie Share::enB;
 
 struct Input {
 
@@ -123,7 +132,27 @@ struct Input {
 			{
 				char c;
 				cin >> c;
-				Share::stage[x][y] = ((c == Cell) ? Table::Cell : Table::Box);
+				switch (c)
+				{
+				case Cell:
+					Share::stage[x][y] = Table::Cell;
+					break;
+				case EmptyBox:
+					Share::stage[x][y] = Table::EmptyBox;
+					break;
+				case RangeBox:
+					Share::stage[x][y] = Table::RangeBox;
+					break;
+				case ExtraBox:
+					Share::stage[x][y] = Table::ExtraBox;
+					break;
+				case Wall:
+					Share::stage[x][y] = Table::Wall;
+					break;
+				default:
+					Share::stage[x][y] = Table::Cell;
+					break;
+				}
 			}
 			cin.ignore();
 		}
@@ -131,8 +160,6 @@ struct Input {
 		cin >> entities; cin.ignore();
 
 		Share::EntitieReset();
-
-		//cerr << "Entitie" << endl;
 
 		for (int i = 0; i < entities; i++) {
 			int entityType;
@@ -144,31 +171,49 @@ struct Input {
 			cin >> entityType >> owner >> x >> y >> param1 >> param2;
 			cin.ignore();
 
-			//cerr << entityType << "," << owner << "," << x << "," << y << "," << param1 << "," << param2 << endl;
-
 			if (entityType == Player)
 			{
 				if (owner == Share::myId)
-					Share::my = Entitie(true, Point(x, y), param1, param2);
+				{
+					Share::my = Entitie(Point(x, y), param1, param2);
+					cerr << param1 << endl;
+				}
 				else
-					Share::en = Entitie(true, Point(x, y), param1, param2);
+					Share::en = Entitie(Point(x, y), param1, param2);
 			}
-			else
+			else if (entityType == Bomb)
 			{
 				if (owner == Share::myId)
-					Share::myB = Entitie(true, Point(x, y), param1, param2);
+					Share::myB.push_back(Entitie(Point(x, y), param1, param2));
 				else
-					Share::enB = Entitie(true, Point(x, y), param1, param2);
+					Share::enB.push_back(Entitie(Point(x, y), param1, param2));
 			}
-
+			else if (entityType == Item)
+			{
+				Share::item.push_back(Entitie(Point(x, y), param1, param2));
+			}
 		}
 
 	}
 
 };
 
+int Share::width;
+int Share::height;
+int Share::myId;
+
+StageArray Share::stage;
+Entitie Share::my;
+Entitie Share::en;
+vector<Entitie> Share::myB;
+vector<Entitie> Share::enB;
+vector<Entitie> Share::item;
+
+const Point Direction[] = { Point(0,-1),Point(-1,0),Point(1,0),Point(0,1) };
+
 const bool inside(const Point& p) { return (0 <= p.x && 0 <= p.y && p.x < Share::width && p.y < Share::height); }
 const int range(const Point& p1, const Point& p2) { return (abs(p1.x - p2.x) + abs(p1.y - p2.y)); }
+const bool isBox(const Table& t) { return (t == Table::EmptyBox || t == Table::RangeBox || t == Table::ExtraBox); }
 
 class AI {
 public:
@@ -185,20 +230,21 @@ public:
 			command = CMove + destination.toString();
 			cerr << command << endl;
 		}
+
+		cerr << "目的あり" << endl;
+		if (destination == Share::My().point)
+		{
+			command = CBomb + destination.toString();
+			if (Share::My().val1 > 0)
+			{
+				destination = Point();
+			}
+			cerr << command << endl;
+		}
 		else
 		{
-			cerr << "目的あり" << endl;
-			if (destination == Share::My().point)
-			{
-				command = CBomb + destination.toString();
-				destination = Point();
-				cerr << command << endl;
-			}
-			else
-			{
-				command = CMove + destination.toString();
-				cerr << command << endl;
-			}
+			command = CMove + destination.toString();
+			cerr << command << endl;
 		}
 
 		return command;
@@ -217,6 +263,49 @@ private:
 		int maxBox = 0;
 		int maxRange = 0;
 
+		const int CheckArrayDefault = -1;
+		vector<vector<int>> check;
+		check.resize(Share::Width());
+		for (auto& c : check) c.resize(Share::Height(), CheckArrayDefault);
+
+		queue<Point> que;
+		que.push(myPoint);
+		check[myPoint.x][myPoint.y] = 0;
+
+		while (!que.empty())
+		{
+			const auto point = que.front();
+			que.pop();
+			const int rng = check[point.x][point.y];
+
+			const int box = destroyBox(point);
+
+			if (box > maxBox)
+			{
+				maxBox = box;
+				maxRange = rng;
+				maxPoint = point;
+			}
+			else if (box == maxBox && rng > maxRange)
+			{
+				maxRange = rng;
+				maxPoint = point;
+			}
+
+			if (rng <= r)
+			{
+				for (const auto& dire : Direction)
+				{
+					const auto next = point + dire;
+					if (inside(next) && check[next.x][next.y] == CheckArrayDefault && Share::Stage(next) == Table::Cell)
+					{
+						que.push(next);
+						check[next.x][next.y] = rng + 1;
+					}
+				}
+			}
+		}
+		/*
 		//プレイヤーが行動できる場所
 		for (int dy = -r; dy <= r; dy++)
 		{
@@ -242,11 +331,7 @@ private:
 				}
 			}
 		}
-
-		cerr << "r    :" << r << endl;
-		cerr << "box  :" << maxBox << endl;
-		cerr << "range:" << maxRange << endl;
-		cerr << "point:" << maxPoint.toString() << endl;
+		*/
 
 		return maxPoint;
 	}
@@ -261,7 +346,7 @@ private:
 			const Point nextPoint = point + Point(0, dy);
 			if (inside(nextPoint))
 			{
-				if (Share::Stage(nextPoint) == Table::Box)
+				if (isBox(Share::Stage(nextPoint)))
 					boxCount++;
 			}
 		}
@@ -270,7 +355,7 @@ private:
 			const Point nextPoint = point + Point(dx, 0);
 			if (inside(nextPoint))
 			{
-				if (Share::Stage(nextPoint) == Table::Box)
+				if (isBox(Share::Stage(nextPoint)))
 					boxCount++;
 			}
 		}
