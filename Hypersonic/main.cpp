@@ -14,25 +14,30 @@ const int Bomb = 1;
 const string CMove = "MOVE ";
 const string CBomb = "BOMB ";
 
-enum class Stage {
-	None,
+enum class Table {
+	Cell,
 	Box,
 	Size
 };
 
-typedef vector<vector<Stage>> StageArray;
+typedef vector<vector<Table>> StageArray;
 
 struct Point {
 	int x;
 	int y;
 
-	Point() :Point(0, 0) {}
+	Point() :Point(-1, -1) {}
 	Point(const int _x, const int _y) { x = _x; y = _y; }
+
+	const Point operator+(const Point& p) const { return Point(x + p.x, y + p.y); }
+	const Point operator-(const Point& p) const { return Point(x - p.x, y - p.y); }
 
 	const bool operator==(const Point& p) const { return (x == p.x && y == p.y); }
 	const bool operator!=(const Point& p) const { return !(*this == p); }
 
 	const string toString() const { return to_string(x) + " " + to_string(y); }
+
+	operator bool() const { return !(x == -1 && y == -1); }
 
 };
 
@@ -63,6 +68,7 @@ public:
 	static const int MyId() { return myId; }
 
 	static const StageArray Stage() { return stage; }
+	static const Table Stage(const Point& p) { return stage[p.x][p.y]; }
 	static const Entitie My() { return my; }
 	static const Entitie En() { return en; }
 	static const Entitie MyB() { return myB; }
@@ -117,12 +123,17 @@ struct Input {
 			{
 				char c;
 				cin >> c;
-				Share::stage[x][y] = (c == Cell) ? Stage::None : Stage::Box;
+				Share::stage[x][y] = ((c == Cell) ? Table::Cell : Table::Box);
 			}
 			cin.ignore();
 		}
 		int entities;
 		cin >> entities; cin.ignore();
+
+		Share::EntitieReset();
+
+		//cerr << "Entitie" << endl;
+
 		for (int i = 0; i < entities; i++) {
 			int entityType;
 			int owner;
@@ -133,7 +144,8 @@ struct Input {
 			cin >> entityType >> owner >> x >> y >> param1 >> param2;
 			cin.ignore();
 
-			Share::EntitieReset();
+			//cerr << entityType << "," << owner << "," << x << "," << y << "," << param1 << "," << param2 << endl;
+
 			if (entityType == Player)
 			{
 				if (owner == Share::myId)
@@ -162,13 +174,109 @@ class AI {
 public:
 
 	const string think() {
-		string command = CMove + Point(0, 0).toString();
-		command = CBomb + Point(10, 12).toString();
+		string command = CMove + Point(Share::Width() - 1, Share::Height() - 1).toString();
+
+
+		cerr << "座標:" << Share::My().point.toString() << endl;
+		if (!destination)
+		{
+			cerr << "目的なし" << endl;
+			destination = search();
+			command = CMove + destination.toString();
+			cerr << command << endl;
+		}
+		else
+		{
+			cerr << "目的あり" << endl;
+			if (destination == Share::My().point)
+			{
+				command = CBomb + destination.toString();
+				destination = Point();
+				cerr << command << endl;
+			}
+			else
+			{
+				command = CMove + destination.toString();
+				cerr << command << endl;
+			}
+		}
+
 		return command;
 	}
 
 private:
 
+	/// <summary>目的地</summary>
+	Point destination;
+
+	const Point search(const int r = 8) const {
+
+		const Point myPoint = Share::My().point;
+
+		Point maxPoint = myPoint;
+		int maxBox = 0;
+		int maxRange = 0;
+
+		//プレイヤーが行動できる場所
+		for (int dy = -r; dy <= r; dy++)
+		{
+			for (int dx = -r; dx <= r; dx++)
+			{
+				const Point nextPoint = myPoint + Point(dx, dy);
+				if (inside(nextPoint) && range(myPoint, nextPoint) <= r && Share::Stage(nextPoint) == Table::Cell)
+				{
+					const int box = destroyBox(nextPoint);
+					const int rng = range(myPoint, nextPoint);
+
+					if (box > maxBox)
+					{
+						maxBox = box;
+						maxRange = rng;
+						maxPoint = nextPoint;
+					}
+					else if (box == maxBox && rng > maxRange)
+					{
+						maxRange = rng;
+						maxPoint = nextPoint;
+					}
+				}
+			}
+		}
+
+		cerr << "r    :" << r << endl;
+		cerr << "box  :" << maxBox << endl;
+		cerr << "range:" << maxRange << endl;
+		cerr << "point:" << maxPoint.toString() << endl;
+
+		return maxPoint;
+	}
+
+	const int destroyBox(const Point& point) const {
+
+		const int r = Share::My().val2;
+		int boxCount = 0;
+
+		for (int dy = -r + 1; dy < r; dy++)
+		{
+			const Point nextPoint = point + Point(0, dy);
+			if (inside(nextPoint))
+			{
+				if (Share::Stage(nextPoint) == Table::Box)
+					boxCount++;
+			}
+		}
+		for (int dx = -r + 1; dx < r; dx++)
+		{
+			const Point nextPoint = point + Point(dx, 0);
+			if (inside(nextPoint))
+			{
+				if (Share::Stage(nextPoint) == Table::Box)
+					boxCount++;
+			}
+		}
+
+		return boxCount;
+	}
 
 };
 
