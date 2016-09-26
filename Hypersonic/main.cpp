@@ -79,16 +79,18 @@ public:
 	static const int Height() { return height; }
 	static const int MyId() { return myId; }
 
-	static const StageArray Stage() { return stage; }
-	static const Table Stage(const Point& p) { return stage[p.x][p.y]; }
-	static const Entitie My() { return my; }
-	static const Entitie En() { return en; }
-	static const vector<Entitie> MyB() { return myB; }
-	static const Entitie MyB(const size_t n) { return myB[n]; }
-	static const vector<Entitie> EnB() { return enB; }
-	static const Entitie EnB(const size_t n) { return enB[n]; }
-	static const vector<Entitie> Item() { return item; }
-	static const Entitie Item(const size_t n) { return item[n]; }
+	static const StageArray& Stage() { return stage; }
+	static const Table& Stage(const Point& p) { return stage[p.x][p.y]; }
+	static const vector<vector<bool>>& BlockStage() { return blockStage; }
+	static const bool BlockStage(const Point& p) { return blockStage[p.x][p.y]; }
+	static const Entitie& My() { return my; }
+	static const Entitie& En() { return en; }
+	static const vector<Entitie>& MyB() { return myB; }
+	static const Entitie& MyB(const size_t n) { return myB[n]; }
+	static const vector<Entitie>& EnB() { return enB; }
+	static const Entitie& EnB(const size_t n) { return enB[n]; }
+	static const vector<Entitie>& Item() { return item; }
+	static const Entitie& Item(const size_t n) { return item[n]; }
 
 private:
 
@@ -97,6 +99,7 @@ private:
 	static int myId;
 
 	static StageArray stage;
+	static vector<vector<bool>> blockStage;
 	static Entitie my;
 	static Entitie en;
 	static vector<Entitie> myB;
@@ -114,6 +117,18 @@ private:
 
 };
 
+int Share::width;
+int Share::height;
+int Share::myId;
+
+StageArray Share::stage;
+vector<vector<bool>> Share::blockStage;
+Entitie Share::my;
+Entitie Share::en;
+vector<Entitie> Share::myB;
+vector<Entitie> Share::enB;
+vector<Entitie> Share::item;
+
 struct Input {
 
 	static void first() {
@@ -122,9 +137,14 @@ struct Input {
 
 		Share::stage.resize(Share::width);
 		for (auto& s : Share::stage) s.resize(Share::height);
+
 	}
 
 	static void loop() {
+
+		Share::blockStage.clear();
+		Share::blockStage.resize(Share::width);
+		for (auto& s : Share::blockStage) s.resize(Share::height);
 
 		for (int y = 0; y < Share::Height(); y++)
 		{
@@ -136,18 +156,23 @@ struct Input {
 				{
 				case Cell:
 					Share::stage[x][y] = Table::Cell;
+					Share::blockStage[x][y] = false;
 					break;
 				case EmptyBox:
 					Share::stage[x][y] = Table::EmptyBox;
+					Share::blockStage[x][y] = true;
 					break;
 				case RangeBox:
 					Share::stage[x][y] = Table::RangeBox;
+					Share::blockStage[x][y] = true;
 					break;
 				case ExtraBox:
 					Share::stage[x][y] = Table::ExtraBox;
+					Share::blockStage[x][y] = true;
 					break;
 				case Wall:
 					Share::stage[x][y] = Table::Wall;
+					Share::blockStage[x][y] = true;
 					break;
 				default:
 					Share::stage[x][y] = Table::Cell;
@@ -176,7 +201,6 @@ struct Input {
 				if (owner == Share::myId)
 				{
 					Share::my = Entitie(Point(x, y), param1, param2);
-					cerr << param1 << endl;
 				}
 				else
 					Share::en = Entitie(Point(x, y), param1, param2);
@@ -184,30 +208,26 @@ struct Input {
 			else if (entityType == Bomb)
 			{
 				if (owner == Share::myId)
+				{
 					Share::myB.push_back(Entitie(Point(x, y), param1, param2));
+					Share::blockStage[x][y] = true;
+				}
 				else
+				{
 					Share::enB.push_back(Entitie(Point(x, y), param1, param2));
+					Share::blockStage[x][y] = true;
+				}
 			}
 			else if (entityType == Item)
 			{
 				Share::item.push_back(Entitie(Point(x, y), param1, param2));
+				Share::blockStage[x][y] = true;
 			}
 		}
 
 	}
 
 };
-
-int Share::width;
-int Share::height;
-int Share::myId;
-
-StageArray Share::stage;
-Entitie Share::my;
-Entitie Share::en;
-vector<Entitie> Share::myB;
-vector<Entitie> Share::enB;
-vector<Entitie> Share::item;
 
 const Point Direction[] = { Point(0,-1),Point(-1,0),Point(1,0),Point(0,1) };
 
@@ -222,16 +242,12 @@ public:
 		string command = CMove + Point(Share::Width() - 1, Share::Height() - 1).toString();
 
 
-		cerr << "座標:" << Share::My().point.toString() << endl;
 		if (!destination)
 		{
-			cerr << "目的なし" << endl;
 			destination = search();
 			command = CMove + destination.toString();
-			cerr << command << endl;
 		}
 
-		cerr << "目的あり" << endl;
 		if (destination == Share::My().point)
 		{
 			command = CBomb + destination.toString();
@@ -239,12 +255,10 @@ public:
 			{
 				destination = Point();
 			}
-			cerr << command << endl;
 		}
 		else
 		{
 			command = CMove + destination.toString();
-			cerr << command << endl;
 		}
 
 		return command;
@@ -305,33 +319,9 @@ private:
 				}
 			}
 		}
-		/*
-		//プレイヤーが行動できる場所
-		for (int dy = -r; dy <= r; dy++)
-		{
-			for (int dx = -r; dx <= r; dx++)
-			{
-				const Point nextPoint = myPoint + Point(dx, dy);
-				if (inside(nextPoint) && range(myPoint, nextPoint) <= r && Share::Stage(nextPoint) == Table::Cell)
-				{
-					const int box = destroyBox(nextPoint);
-					const int rng = range(myPoint, nextPoint);
 
-					if (box > maxBox)
-					{
-						maxBox = box;
-						maxRange = rng;
-						maxPoint = nextPoint;
-					}
-					else if (box == maxBox && rng > maxRange)
-					{
-						maxRange = rng;
-						maxPoint = nextPoint;
-					}
-				}
-			}
-		}
-		*/
+		cerr << "P:" << maxPoint.toString() << endl;
+		cerr << "B:" << maxBox << endl;
 
 		return maxPoint;
 	}
@@ -341,22 +331,53 @@ private:
 		const int r = Share::My().val2;
 		int boxCount = 0;
 
-		for (int dy = -r + 1; dy < r; dy++)
+		for (int dy = 1; dy < r; dy++)
 		{
 			const Point nextPoint = point + Point(0, dy);
-			if (inside(nextPoint))
+			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
 			{
 				if (isBox(Share::Stage(nextPoint)))
+				{
 					boxCount++;
+					break;
+				}
 			}
 		}
-		for (int dx = -r + 1; dx < r; dx++)
+		for (int dy = 1; dy < r; dy++)
 		{
-			const Point nextPoint = point + Point(dx, 0);
-			if (inside(nextPoint))
+			const Point nextPoint = point + Point(0, -dy);
+			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
 			{
 				if (isBox(Share::Stage(nextPoint)))
+				{
 					boxCount++;
+					break;
+				}
+			}
+		}
+
+		for (int dx = 1; dx < r; dx++)
+		{
+			const Point nextPoint = point + Point(dx, 0);
+			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
+			{
+				if (isBox(Share::Stage(nextPoint)))
+				{
+					boxCount++;
+					break;
+				}
+			}
+		}
+		for (int dx = 1; dx < r; dx++)
+		{
+			const Point nextPoint = point + Point(-dx, 0);
+			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
+			{
+				if (isBox(Share::Stage(nextPoint)))
+				{
+					boxCount++;
+					break;
+				}
 			}
 		}
 
@@ -374,8 +395,6 @@ int main()
 	while (true)
 	{
 		Input::loop();
-
-
 
 		cout << ai.think() << endl;
 	}
