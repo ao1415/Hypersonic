@@ -337,10 +337,8 @@ private:
 			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
 			{
 				if (isBox(Share::Stage(nextPoint)))
-				{
 					boxCount++;
-					break;
-				}
+				break;
 			}
 		}
 		for (int dy = 1; dy < r; dy++)
@@ -349,10 +347,8 @@ private:
 			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
 			{
 				if (isBox(Share::Stage(nextPoint)))
-				{
 					boxCount++;
-					break;
-				}
+				break;
 			}
 		}
 
@@ -362,10 +358,8 @@ private:
 			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
 			{
 				if (isBox(Share::Stage(nextPoint)))
-				{
 					boxCount++;
-					break;
-				}
+				break;
 			}
 		}
 		for (int dx = 1; dx < r; dx++)
@@ -374,10 +368,8 @@ private:
 			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
 			{
 				if (isBox(Share::Stage(nextPoint)))
-				{
 					boxCount++;
-					break;
-				}
+				break;
 			}
 		}
 
