@@ -17,6 +17,9 @@ const int Player = 0;
 const int Bomb = 1;
 const int Item = 2;
 
+const int ItemRange = 1;
+const int ItemExtra = 2;
+
 const string CMove = "MOVE ";
 const string CBomb = "BOMB ";
 
@@ -81,14 +84,22 @@ public:
 
 	static const StageArray& Stage() { return stage; }
 	static const Table& Stage(const Point& p) { return stage[p.x][p.y]; }
+
 	static const vector<vector<bool>>& BlockStage() { return blockStage; }
 	static const bool BlockStage(const Point& p) { return blockStage[p.x][p.y]; }
+
+	static const vector<vector<int>>& ItemStage() { return itemStage; }
+	static const int ItemStage(const Point& p) { return itemStage[p.x][p.y]; }
+
 	static const Entitie& My() { return my; }
 	static const Entitie& En() { return en; }
+
 	static const vector<Entitie>& MyB() { return myB; }
 	static const Entitie& MyB(const size_t n) { return myB[n]; }
+
 	static const vector<Entitie>& EnB() { return enB; }
 	static const Entitie& EnB(const size_t n) { return enB[n]; }
+
 	static const vector<Entitie>& Item() { return item; }
 	static const Entitie& Item(const size_t n) { return item[n]; }
 
@@ -100,6 +111,7 @@ private:
 
 	static StageArray stage;
 	static vector<vector<bool>> blockStage;
+	static vector<vector<int>> itemStage;
 	static Entitie my;
 	static Entitie en;
 	static vector<Entitie> myB;
@@ -113,6 +125,9 @@ private:
 		myB.clear();
 		enB.clear();
 		item.clear();
+		itemStage.clear();
+		itemStage.resize(width);
+		for (auto& s : itemStage) s.resize(height);
 	}
 
 };
@@ -123,6 +138,7 @@ int Share::myId;
 
 StageArray Share::stage;
 vector<vector<bool>> Share::blockStage;
+vector<vector<int>> Share::itemStage;
 Entitie Share::my;
 Entitie Share::en;
 vector<Entitie> Share::myB;
@@ -222,6 +238,7 @@ struct Input {
 			{
 				Share::item.push_back(Entitie(Point(x, y), param1, param2));
 				Share::blockStage[x][y] = true;
+				Share::itemStage[x][y] = param1;
 			}
 		}
 
@@ -250,14 +267,42 @@ public:
 
 		if (destination == Share::My().point)
 		{
-			command = CBomb + destination.toString();
-			if (Share::My().val1 > 0)
+			if (destroyBox(destination) > 0)
 			{
-				destination = Point();
+				command = CBomb + destination.toString();
+				if (Share::My().val1 > 0)
+				{
+					destination = Point();
+				}
+			}
+			else
+			{
+				if (subDestinationFlag)
+				{
+					destination = subDestination;
+					subDestinationFlag = false;
+					command = CMove + destination.toString();
+				}
+				else
+				{
+					destination = Point();
+				}
 			}
 		}
 		else
 		{
+
+			if (minItemRange() <= 5)
+			{
+				const Point d = itemSearch();
+				if (d)
+				{
+					subDestination = destination;
+					subDestinationFlag = true;
+					destination = d;
+				}
+			}
+
 			command = CMove + destination.toString();
 		}
 
@@ -268,6 +313,9 @@ private:
 
 	/// <summary>–Ú“I’n</summary>
 	Point destination;
+
+	bool subDestinationFlag = false;
+	Point subDestination;
 
 	const Point search(const int r = 8) const {
 
@@ -374,6 +422,98 @@ private:
 		}
 
 		return boxCount;
+	}
+
+	const int minItemRange() const {
+
+		const auto my = Share::My();
+		const auto items = Share::Item();
+
+		const int ExtraPriority = 2;
+		const int RangePriority = 1;
+
+		const int RangeMax = 8;
+		const int ExtraMax = 8;
+
+		int itemRange = INT32_MAX;
+
+		for (const auto& item : items)
+		{
+			if (item.val1 == ItemRange)
+			{
+				if (my.val2 <= RangeMax)
+				{
+					itemRange = min(itemRange, range(my.point, item.point));
+				}
+			}
+			else if (item.val1 == ItemExtra)
+			{
+				if (my.val2 <= ExtraMax)
+				{
+					itemRange = min(itemRange, range(my.point, item.point));
+				}
+			}
+		}
+		return itemRange;
+	}
+
+	const Point itemSearch(const int r = 5) const {
+
+		const Point myPoint = Share::My().point;
+
+		Point itemPoint;
+		int minRange = INT32_MAX;
+
+		const int CheckArrayDefault = -1;
+		vector<vector<int>> check;
+		check.resize(Share::Width());
+		for (auto& c : check) c.resize(Share::Height(), CheckArrayDefault);
+
+		queue<Point> que;
+		que.push(myPoint);
+		check[myPoint.x][myPoint.y] = 0;
+
+		while (!que.empty())
+		{
+			const auto point = que.front();
+			que.pop();
+			const int rng = check[point.x][point.y];
+
+			if (Share::ItemStage(point) == ItemExtra)
+			{
+				if (minRange > rng)
+				{
+					minRange = rng;
+					itemPoint = point;
+				}
+			}
+			else if (Share::ItemStage(point) == ItemRange)
+			{
+				if (minRange > rng)
+				{
+					minRange = rng;
+					itemPoint = point;
+				}
+			}
+
+			if (rng <= r)
+			{
+				for (const auto& dire : Direction)
+				{
+					const auto next = point + dire;
+					if (inside(next) && check[next.x][next.y] == CheckArrayDefault && Share::Stage(next) == Table::Cell)
+					{
+						que.push(next);
+						check[next.x][next.y] = rng + 1;
+					}
+				}
+			}
+		}
+
+		cerr << "P:" << itemPoint.toString() << endl;
+		cerr << "R:" << minRange << endl;
+
+		return itemPoint;
 	}
 
 };
