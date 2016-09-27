@@ -76,14 +76,12 @@ public:
 	Grid(int w, int h) : Grid(Size(w, h)) {}
 	Grid(const Size& s) {
 		this->s = s;
-		grid.resize(s.h);
-		for (auto& g : grid) g.resize(s.w);
+		resize(s);
 	}
 	Grid(int w, int h, Type v) : Grid(Size(w, h), v) {}
 	Grid(const Size& s, const Type v) {
 		this->s = s;
-		grid.resize(s.h);
-		for (auto& g : grid) g.resize(s.w, v);
+		resize(s, v);
 	}
 
 	const Type& operator[](const Point& p) const { return grid[p.y][p.x]; }
@@ -92,6 +90,16 @@ public:
 	std::vector<Type>& operator[](int y) { return grid[y]; }
 
 	const Size& size() const { return s; }
+	void resize(int w, int h) { resize(Size(w, h)); }
+	void resize(const Size& s) {
+		grid.resize(s.h);
+		for (auto& g : grid) g.resize(s.w);
+	}
+	void resize(int w, int h, const Type v) { resize(Size(w, h), v); }
+	void resize(const Size& s, const Type v) {
+		grid.resize(s.h);
+		for (auto& g : grid) g.resize(s.w, v);
+	}
 
 	const std::string toString(const char c = ',') const {
 
@@ -129,6 +137,8 @@ struct Entitie {
 	int val2;
 };
 
+typedef vector<Entitie> Entities;
+
 struct Input;
 const bool inside(const Point& p);
 
@@ -142,8 +152,8 @@ public:
 	inline static const int Height() { return height; }
 	inline static const int MyId() { return myId; }
 
-	inline static const StageArray& Stage() { return stage; }
-	inline static const Table& Stage(const Point& p) { return stage[p.x][p.y]; }
+	inline static const Grid<Table>& Stage() { return stage; }
+	inline static const Table& Stage(const Point& p) { return stage[p]; }
 
 	inline static const vector<vector<bool>>& BlockStage() { return blockStage; }
 	inline static const bool BlockStage(const Point& p) { return blockStage[p.x][p.y]; }
@@ -152,16 +162,16 @@ public:
 	inline static const int ItemStage(const Point& p) { return itemStage[p.x][p.y]; }
 
 	inline static const Entitie& My() { return my; }
-	inline static const vector<Entitie>& En() { return en; }
+	inline static const Entities& En() { return en; }
 	inline static const Entitie& En(const size_t n) { return en[n]; }
 
-	inline static const vector<Entitie>& MyB() { return myB; }
+	inline static const Entities& MyB() { return myB; }
 	inline static const Entitie& MyB(const size_t n) { return myB[n]; }
 
-	inline static const vector<Entitie>& EnB() { return enB; }
+	inline static const Entities& EnB() { return enB; }
 	inline static const Entitie& EnB(const size_t n) { return enB[n]; }
 
-	inline static const vector<Entitie>& Item() { return item; }
+	inline static const Entities& Item() { return item; }
 	inline static const Entitie& Item(const size_t n) { return item[n]; }
 
 private:
@@ -170,15 +180,15 @@ private:
 	static int height;
 	static int myId;
 
-	static StageArray stage;
+	static Grid<Table> stage;
 	static vector<vector<bool>> blockStage;
 	static vector<vector<int>> itemStage;
 	static Entitie my;
-	static vector<Entitie> en;
-	static vector<Entitie> myB;
-	static vector<Entitie> enB;
+	static Entities en;
+	static Entities myB;
+	static Entities enB;
 
-	static vector<Entitie> item;
+	static Entities item;
 
 	static void EntitieReset() {
 		my = Entitie();
@@ -197,14 +207,14 @@ int Share::width;
 int Share::height;
 int Share::myId;
 
-StageArray Share::stage;
+Grid<Table> Share::stage;
 vector<vector<bool>> Share::blockStage;
 vector<vector<int>> Share::itemStage;
 Entitie Share::my;
-vector<Entitie> Share::en;
-vector<Entitie> Share::myB;
-vector<Entitie> Share::enB;
-vector<Entitie> Share::item;
+Entities Share::en;
+Entities Share::myB;
+Entities Share::enB;
+Entities Share::item;
 
 struct Input {
 
@@ -212,8 +222,7 @@ struct Input {
 		cin >> Share::width >> Share::height >> Share::myId;
 		cin.ignore();
 
-		Share::stage.resize(Share::width);
-		for (auto& s : Share::stage) s.resize(Share::height);
+		Share::stage.resize(Share::width, Share::height);
 
 	}
 
@@ -232,27 +241,27 @@ struct Input {
 				switch (c)
 				{
 				case Cell:
-					Share::stage[x][y] = Table::Cell;
+					Share::stage[Point(x, y)] = Table::Cell;
 					Share::blockStage[x][y] = false;
 					break;
 				case EmptyBox:
-					Share::stage[x][y] = Table::EmptyBox;
+					Share::stage[Point(x, y)] = Table::EmptyBox;
 					Share::blockStage[x][y] = true;
 					break;
 				case RangeBox:
-					Share::stage[x][y] = Table::RangeBox;
+					Share::stage[Point(x, y)] = Table::RangeBox;
 					Share::blockStage[x][y] = true;
 					break;
 				case ExtraBox:
-					Share::stage[x][y] = Table::ExtraBox;
+					Share::stage[Point(x, y)] = Table::ExtraBox;
 					Share::blockStage[x][y] = true;
 					break;
 				case Wall:
-					Share::stage[x][y] = Table::Wall;
+					Share::stage[Point(x, y)] = Table::Wall;
 					Share::blockStage[x][y] = true;
 					break;
 				default:
-					Share::stage[x][y] = Table::Cell;
+					Share::stage[Point(x, y)] = Table::Cell;
 					break;
 				}
 			}
@@ -321,30 +330,119 @@ const bool isBox(const Table& t) { return (t == Table::EmptyBox || t == Table::R
 class BombSimulator {
 public:
 
-	void simulate(const vector<Entitie> myB = Share::MyB(), const vector<Entitie> enB = Share::EnB()) {
+	void simulate(const Entities myB = Share::MyB(), const Entities enB = Share::EnB(), const Entities item = Share::Item(), Grid<Table> stage = Share::Stage()) {
 
-		Grid<int> bombStage(Share::Width(), Share::Height(), 0);
+		Grid<pair<int, int>> bombStage(Share::Width(), Share::Height(), { 0,0 });
+		Grid<int> itemStage(bombStage.size(), 0);
 
-		for (const auto& b : myB) bombStage[b.point] = b.val1;
-		for (const auto& b : enB) bombStage[b.point] = b.val1;
+		for (const auto& b : myB) bombStage[b.point] = { b.val1,b.val2 };
+		for (const auto& b : enB) bombStage[b.point] = { b.val1,b.val2 };
+
+		for (const auto& i : item) itemStage[i.point] = i.val1;
 
 		const int BombTimer = 8;
+		dangers.resize(8);
+
 		for (int i = 0; i < BombTimer; i++)
 		{
+			set<Point> danger;
+
 			for (int y = 0; y < Share::Height(); y++)
 			{
 				for (int x = 0; x < Share::Width(); x++)
 				{
-
+					if (bombStage[y][x].first == 1)
+					{
+						auto d = destroy(Point(x, y), bombStage, itemStage, stage);
+						for (const auto b : d) danger.insert(b);
+					}
+					bombStage[y][x].first--;
 				}
 			}
+
+			for (const auto& p : danger)
+			{
+				if (itemStage[p] > 0)
+					itemStage[p] = 0;
+
+				if (stage[p] == Table::ExtraBox)
+				{
+					stage[p] = Table::Cell;
+					itemStage[p] = ItemExtra;
+				}
+				else if (stage[p] == Table::RangeBox)
+				{
+					stage[p] = Table::Cell;
+					itemStage[p] = ItemRange;
+				}
+				else if (stage[p] == Table::EmptyBox)
+					stage[p] = Table::Cell;
+			}
+
+			dangers[i] = danger;
+
 		}
 
 	}
 
+	const bool check(const Point& point) const {
+		for (size_t i = 0; i < dangers.size(); i++)
+			if (dangers[i].find(point) != dangers[i].end())
+				return true;
+		return false;
+	}
+
+
 private:
 
-	vector<set<Point>> danger;
+	vector<set<Point>> dangers;
+
+	const set<Point> destroy(const Point& point, Grid<pair<int, int>>& bomb, Grid<int>& item, Grid<Table>& stage) {
+
+		const int r = bomb[point].second;
+		set<Point> danger;
+		danger.insert(point);
+		bomb[point] = { 0,0 };
+
+		const auto insert = [&](const Point& p) {
+			if (inside(p))
+			{
+				danger.insert(p);
+				if (bomb[p].first > 0)
+				{
+					const auto d = destroy(p, bomb, item, stage);
+					for (const auto& b : d) danger.insert(b);
+				}
+				else if (item[p] != 0 || stage[p] != Table::Cell)
+					return true;
+			}
+			return false;
+		};
+
+		for (int dy = 1; dy < r; dy++)
+		{
+			const Point nextPoint = point + Point(0, dy);
+			if (insert(nextPoint)) break;
+		}
+		for (int dy = 1; dy < r; dy++)
+		{
+			const Point nextPoint = point + Point(0, -dy);
+			if (insert(nextPoint)) break;
+		}
+
+		for (int dx = 1; dx < r; dx++)
+		{
+			const Point nextPoint = point + Point(dx, 0);
+			if (insert(nextPoint)) break;
+		}
+		for (int dx = 1; dx < r; dx++)
+		{
+			const Point nextPoint = point + Point(-dx, 0);
+			if (insert(nextPoint)) break;
+		}
+
+		return danger;
+	}
 
 };
 
@@ -565,6 +663,8 @@ public:
 
 		bombSimulator.simulate();
 
+		bool bombFlag = false;
+
 		if (!destination)
 		{
 			destination = search.bocSearch();
@@ -576,6 +676,7 @@ public:
 			if (search.destroyBox(destination) > 0)
 			{
 				command = CBomb + destination.toString();
+				bombFlag = true;
 				if (Share::My().val1 > 0)
 				{
 					destination = Point();
@@ -612,6 +713,20 @@ public:
 			command = CMove + destination.toString();
 		}
 
+		updateRangeTable();
+		Point movePoint = move();
+
+		if (bombSimulator.check(movePoint))
+		{
+			movePoint = Share::My().point;
+			cerr << "danger" << endl;
+		}
+
+		if (!bombFlag)
+			command = CMove + movePoint.toString();
+		else
+			command = CBomb + movePoint.toString();
+
 		return command;
 	}
 
@@ -625,6 +740,53 @@ private:
 
 	Search search;
 	BombSimulator bombSimulator;
+
+	Grid<int> rangeTable;
+
+	void updateRangeTable() {
+
+		rangeTable.resize(Share::Width(), Share::Height(), INT32_MAX);
+
+		if (!destination) return;
+
+		rangeTable[destination] = 0;
+
+		queue<Point> que;
+		que.push(destination);
+
+		while (!que.empty())
+		{
+			const auto point = que.front();
+			que.pop();
+			const int r = rangeTable[point];
+
+			for (const auto dire : Direction)
+			{
+				const auto p = point + dire;
+				if (inside(p) && rangeTable[p] == INT32_MAX)
+				{
+					rangeTable[p] = r + 1;
+					que.push(p);
+				}
+			}
+
+		}
+	}
+
+	const Point move() const {
+
+		const Point myPoint = Share::My().point;
+
+		for (const auto& dire : Direction)
+		{
+			const Point point = myPoint + dire;
+			if (inside(point))
+				if (rangeTable[point] < rangeTable[myPoint])
+					return point;
+		}
+		return myPoint;
+	}
+
 };
 
 int main()
