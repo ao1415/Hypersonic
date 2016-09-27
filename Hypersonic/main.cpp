@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <set>
 #include <queue>
+#include <map>
 
 using namespace std;
 
@@ -158,7 +159,7 @@ public:
 	inline static const vector<vector<bool>>& BlockStage() { return blockStage; }
 	inline static const bool BlockStage(const Point& p) { return blockStage[p.x][p.y]; }
 
-	inline static const vector<vector<int>>& ItemStage() { return itemStage; }
+	inline static const Grid<int>& ItemStage() { return itemStage; }
 	inline static const int ItemStage(const Point& p) { return itemStage[p.x][p.y]; }
 
 	inline static const Entitie& My() { return my; }
@@ -182,7 +183,7 @@ private:
 
 	static Grid<Table> stage;
 	static vector<vector<bool>> blockStage;
-	static vector<vector<int>> itemStage;
+	static Grid<int> itemStage;
 	static Entitie my;
 	static Entities en;
 	static Entities myB;
@@ -196,9 +197,7 @@ private:
 		myB.clear();
 		enB.clear();
 		item.clear();
-		itemStage.clear();
-		itemStage.resize(width);
-		for (auto& s : itemStage) s.resize(height);
+		itemStage.resize(width, height, 0);
 	}
 
 };
@@ -209,7 +208,7 @@ int Share::myId;
 
 Grid<Table> Share::stage;
 vector<vector<bool>> Share::blockStage;
-vector<vector<int>> Share::itemStage;
+Grid<int> Share::itemStage;
 Entitie Share::my;
 Entities Share::en;
 Entities Share::myB;
@@ -308,7 +307,7 @@ struct Input {
 			{
 				Share::item.push_back(Entitie(Point(x, y), param1, param2));
 				Share::blockStage[x][y] = true;
-				Share::itemStage[x][y] = param1;
+				Share::itemStage[Point(x, y)] = param1;
 			}
 		}
 
@@ -351,7 +350,7 @@ public:
 			{
 				for (int x = 0; x < Share::Width(); x++)
 				{
-					if (bombStage[y][x].first == 1)
+					if (bombStage[y][x].first == 2)
 					{
 						auto d = destroy(Point(x, y), bombStage, itemStage, stage);
 						for (const auto b : d) danger.insert(b);
@@ -392,10 +391,64 @@ public:
 		return false;
 	}
 
+	bool next(const Point& myPoint, Grid<pair<int, int>>& bomb, Grid<int>& item, Grid<Table>& stage, int& boxNum) {
+
+		set<Point> danger;
+		myBombCount = 0;
+		bombList.clear();
+
+		for (const auto& b : Share::MyB()) bombList[b.point] = Share::MyId();
+
+		for (int y = 0; y < Share::Height(); y++)
+		{
+			for (int x = 0; x < Share::Width(); x++)
+			{
+				if (bomb[y][x].first == 2)
+				{
+					auto d = destroy(Point(x, y), bomb, item, stage);
+					for (const auto b : d) danger.insert(b);
+				}
+				bomb[y][x].first--;
+			}
+		}
+
+		for (const auto& p : danger)
+		{
+			if (p == myPoint) return true;
+
+			if (item[p] > 0)
+				item[p] = 0;
+
+			if (stage[p] == Table::ExtraBox)
+			{
+				stage[p] = Table::Cell;
+				item[p] = ItemExtra;
+				boxNum++;
+			}
+			else if (stage[p] == Table::RangeBox)
+			{
+				stage[p] = Table::Cell;
+				item[p] = ItemRange;
+				boxNum++;
+			}
+			else if (stage[p] == Table::EmptyBox)
+			{
+				stage[p] = Table::Cell;
+				boxNum++;
+			}
+		}
+
+		return false;
+	}
+
+	const int getBomb() const { return myBombCount; }
 
 private:
 
 	vector<set<Point>> dangers;
+	int myBombCount;
+
+	map<Point, int> bombList;
 
 	const set<Point> destroy(const Point& point, Grid<pair<int, int>>& bomb, Grid<int>& item, Grid<Table>& stage) {
 
@@ -403,6 +456,8 @@ private:
 		set<Point> danger;
 		danger.insert(point);
 		bomb[point] = { 0,0 };
+		if (bombList.find(point) != bombList.end())
+			myBombCount++;
 
 		const auto insert = [&](const Point& p) {
 			if (inside(p))
@@ -658,136 +713,128 @@ private:
 class AI {
 public:
 
+	//ビームサーチを実装する
 	const string think() {
 
-		//探査方法を変更する
+		const Point Move[] = { Point(0,-1),Point(-1,0),Point(1,0),Point(0,1),Point(0,0) };
+
+		//保存する情報　自機　ステージ(ボム・アイテム・ボックス)
+		Data now;
+		now.my = Share::My();
+		now.stage = Share::Stage();
+		now.command = "";
+		now.score = 0;
+
+		now.bomb.resize(Share::Width(), Share::Height(), { 0,0 });
+		now.item.resize(Share::Width(), Share::Height(), 0);
+
+		for (const auto& b : Share::MyB()) now.bomb[b.point] = { b.val1,b.val2 };
+		for (const auto& b : Share::EnB()) now.bomb[b.point] = { b.val1,b.val2 };
+
+		for (const auto& i : Share::Item()) now.item[i.point] = i.val1;
+
+		priority_queue<Data> que;
+		que.push(now);
+
+		for (int turn = 0; turn < 20; turn++)
+		{
+			priority_queue<Data> next;
+
+			int width = 0;
+			const double Decay = 0.5;
+			while (!que.empty() && width < 100)
+			{
+				for (const auto& dire : Move)
+				{
+					Data d;
+					const Point p = que.top().my.point + dire;
+
+					if (inside(p) && que.top().stage[p] == Table::Cell && que.top().bomb[p].first <= 0)
+					{
+						d = que.top();
+						int boxNum = 0;
+						if (turn == 0) d.command = CMove + p.toString();
+						boxNum = 0;
+						if (!bombSimulator.next(p, d.bomb, d.item, d.stage, boxNum))
+						{
+							d.my.point = p;
+							if (d.item[p] == ItemExtra) d.my.val1++;
+							if (d.item[p] == ItemRange) d.my.val2++;
+							d.item[p] = 0;
+							d.my.val1 += bombSimulator.getBomb();
+
+							d.score += (int)(eval(d, boxNum) * pow(Decay, turn));
+
+							next.push(d);
+						}
+
+						d = que.top();
+						if (d.my.val1 > 0)
+						{
+							if (turn == 0) d.command = CBomb + p.toString();
+							boxNum = 0;
+							d.bomb[d.my.point] = { 8,d.my.val2 };
+							if (!bombSimulator.next(p, d.bomb, d.item, d.stage, boxNum))
+							{
+								d.my.point = p;
+								if (d.item[p] == ItemExtra) d.my.val1++;
+								if (d.item[p] == ItemRange) d.my.val2++;
+
+								d.score += (int)(eval(d, boxNum) * pow(Decay, turn));
+
+								next.push(d);
+							}
+						}
+					}
+
+				}
+
+				que.pop();
+				width++;
+			}
+
+			que.swap(next);
+		}
+
+		if (!que.empty())
+		{
+			cerr << "Score:" << que.top().score << endl;
+			return que.top().command;
+		}
 
 		string command = CMove + Point(Share::Width() - 1, Share::Height() - 1).toString();
-
-		bombSimulator.simulate();
-
-		bool bombFlag = false;
-
-		if (!destination)
-		{
-			destination = search.bocSearch();
-			command = CMove + destination.toString();
-		}
-
-		if (destination == Share::My().point)
-		{
-			if (search.destroyBox(destination) > 0)
-			{
-				command = CBomb + destination.toString();
-				bombFlag = true;
-				if (Share::My().val1 > 0)
-				{
-					destination = Point();
-				}
-			}
-			else
-			{
-				if (subDestinationFlag)
-				{
-					destination = subDestination;
-					subDestinationFlag = false;
-					command = CMove + destination.toString();
-				}
-				else
-				{
-					destination = Point();
-				}
-			}
-		}
-		else
-		{
-
-			if (search.minItemRange() <= 5)
-			{
-				const Point d = search.itemSearch();
-				if (d)
-				{
-					subDestination = destination;
-					subDestinationFlag = true;
-					destination = d;
-				}
-			}
-
-			command = CMove + destination.toString();
-		}
-
-		updateRangeTable();
-		Point movePoint = move();
-
-		if (bombSimulator.check(movePoint))
-		{
-			movePoint = Share::My().point;
-			cerr << "danger" << endl;
-		}
-
-		if (!bombFlag)
-			command = CMove + movePoint.toString();
-		else
-			command = CBomb + movePoint.toString();
 
 		return command;
 	}
 
+
+
 private:
-
-	/// <summary>目的地</summary>
-	Point destination;
-
-	bool subDestinationFlag = false;
-	Point subDestination;
 
 	Search search;
 	BombSimulator bombSimulator;
 
-	Grid<int> rangeTable;
+	struct Data {
+		int score;
+		Entitie my;
+		Grid<pair<int, int>> bomb;
+		Grid<int> item;
+		Grid<Table> stage;
+		string command;
 
-	void updateRangeTable() {
+		const bool operator<(const Data& d) const { return score < d.score; }
 
-		rangeTable.resize(Share::Width(), Share::Height(), INT32_MAX);
+	};
 
-		if (!destination) return;
+	const int eval(const Data& data, const int boxNum) const {
+		int s = 0;
 
-		rangeTable[destination] = 0;
+		s += boxNum * 1000;
 
-		queue<Point> que;
-		que.push(destination);
+		s += min(data.my.val1, 7) * 10;
+		s += min(data.my.val2, 8) * 6;
 
-		while (!que.empty())
-		{
-			const auto point = que.front();
-			que.pop();
-			const int r = rangeTable[point];
-
-			for (const auto dire : Direction)
-			{
-				const auto p = point + dire;
-				if (inside(p) && rangeTable[p] == INT32_MAX)
-				{
-					rangeTable[p] = r + 1;
-					que.push(p);
-				}
-			}
-
-		}
-	}
-
-	const Point move() const {
-
-		const Point myPoint = Share::My().point;
-
-		for (const auto& dire : Direction)
-		{
-			const Point point = myPoint + dire;
-			if (inside(point))
-				if (rangeTable[point] < rangeTable[myPoint])
-					return point;
-		}
-		return myPoint;
+		return s;
 	}
 
 };
