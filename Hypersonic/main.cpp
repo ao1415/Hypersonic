@@ -736,13 +736,13 @@ public:
 		priority_queue<Data> que;
 		que.push(now);
 
-		for (int turn = 0; turn < 20; turn++)
+		for (int turn = 0; turn < 32; turn++)
 		{
 			priority_queue<Data> next;
 
 			int width = 0;
-			const double Decay = 0.5;
-			while (!que.empty() && width < 100)
+			const double Decay = 0.9;
+			while (!que.empty() && width < 10)
 			{
 				for (const auto& dire : Move)
 				{
@@ -761,7 +761,7 @@ public:
 							if (d.item[p] == ItemExtra) d.my.val1++;
 							if (d.item[p] == ItemRange) d.my.val2++;
 							d.item[p] = 0;
-							d.my.val1 += bombSimulator.getBomb();
+							//d.my.val1 += bombSimulator.getBomb();
 
 							d.score += (int)(eval(d, boxNum) * pow(Decay, turn));
 
@@ -779,6 +779,8 @@ public:
 								d.my.point = p;
 								if (d.item[p] == ItemExtra) d.my.val1++;
 								if (d.item[p] == ItemRange) d.my.val2++;
+								d.item[p] = 0;
+								//d.my.val1 += bombSimulator.getBomb();
 
 								d.score += (int)(eval(d, boxNum) * pow(Decay, turn));
 
@@ -830,9 +832,12 @@ private:
 		int s = 0;
 
 		s += boxNum * 1000;
+		s -= data.my.val1 * 10;
 
 		s += min(data.my.val1, 7) * 10;
 		s += min(data.my.val2, 8) * 6;
+
+
 
 		return s;
 	}
