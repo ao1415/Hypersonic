@@ -714,7 +714,7 @@ public:
 		Data now;
 		now.my = Share::My();
 		now.stage = Share::Stage();
-		now.command = "";
+		now.command.clear();
 		now.score = 0;
 		now.box = 0;
 
@@ -729,43 +729,28 @@ public:
 		priority_queue<Data> que;
 		que.push(now);
 
-		for (int turn = 0; turn < 32; turn++)
+		const double Decay = 0.9;
+		for (int turn = 0; turn < 40; turn++)
 		{
 			priority_queue<Data> next;
 
 			int width = 0;
-			const double Decay = 1;
 			while (!que.empty() && width < 10)
 			{
 				for (const auto& dire : Move)
 				{
 					Data d;
+					int boxNum = 0;
 					const Point p = que.top().my.point + dire;
 
 					if (inside(p) && que.top().stage[p] == Table::Cell && que.top().bomb[p].first <= 0)
 					{
 						d = que.top();
-						int boxNum = 0;
-						if (turn == 0) d.command = CMove + p.toString();
-						boxNum = 0;
-						if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage, boxNum))
-						{
-							d.my.point = p;
-							if (d.item[p] == ItemExtra) d.my.val1++;
-							if (d.item[p] == ItemRange) d.my.val2++;
-							d.item[p] = 0;
-							//d.my.val1 += bombSimulator.getBomb();
-							d.box += boxNum;
-							d.score += (int)(eval(d) * pow(Decay, turn));
-
-							next.push(d);
-						}
-
-						d = que.top();
 						if (d.my.val1 > 0)
 						{
-							if (turn == 0) d.command = CBomb + p.toString();
+							d.command.push_back(CBomb + p.toString());
 							d.bomb[d.my.point] = { 8,d.my.val2 };
+							d.my.val1--;
 							boxNum = 0;
 							if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage, boxNum))
 							{
@@ -773,13 +758,30 @@ public:
 								if (d.item[p] == ItemExtra) d.my.val1++;
 								if (d.item[p] == ItemRange) d.my.val2++;
 								d.item[p] = 0;
-								//d.my.val1 += bombSimulator.getBomb();
+								d.my.val1 += bombSimulator.getBomb();
 								d.box += boxNum;
 								d.score += (int)(eval(d) * pow(Decay, turn));
 
 								next.push(d);
 							}
 						}
+
+						d = que.top();
+						d.command.push_back(CMove + p.toString());
+						boxNum = 0;
+						if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage, boxNum))
+						{
+							d.my.point = p;
+							if (d.item[p] == ItemExtra) d.my.val1++;
+							if (d.item[p] == ItemRange) d.my.val2++;
+							d.item[p] = 0;
+							d.my.val1 += bombSimulator.getBomb();
+							d.box += boxNum;
+							d.score += (int)(eval(d) * pow(Decay, turn));
+
+							next.push(d);
+						}
+
 					}
 
 				}
@@ -794,7 +796,8 @@ public:
 		if (!que.empty())
 		{
 			cerr << "Score:" << que.top().score << endl;
-			return que.top().command;
+			for (const auto& c : que.top().command) cerr << c << endl;
+			return que.top().command[0];
 		}
 
 		string command = CMove + Point(Share::Width() - 1, Share::Height() - 1).toString();
@@ -816,7 +819,7 @@ private:
 		Grid<pair<int, int>> bomb;
 		Grid<int> item;
 		Grid<Table> stage;
-		string command;
+		vector<string> command;
 
 		const bool operator<(const Data& d) const { return score < d.score; }
 
@@ -828,10 +831,10 @@ private:
 		s += data.box * 10;
 		s -= data.my.val1 * 10;
 
+		//s += range(Share::My().point, data.my.point);
+
 		s += min(data.my.val1, 7) * 10;
 		s += min(data.my.val2, 8) * 6;
-
-
 
 		return s;
 	}
