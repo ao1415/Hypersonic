@@ -851,6 +851,6 @@ int main()
 	{
 		Input::loop();
 
-		cout << ai.think() << endl;
+		cout << ai.think() << " ao1415" << endl;
 	}
 }
