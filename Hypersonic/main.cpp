@@ -659,6 +659,9 @@ class AI {
 public:
 
 	const string think() {
+
+		//’T¸•û–@‚ğ•ÏX‚·‚é
+
 		string command = CMove + Point(Share::Width() - 1, Share::Height() - 1).toString();
 
 		bombSimulator.simulate();
