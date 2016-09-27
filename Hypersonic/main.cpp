@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <stack>
+#include <set>
 #include <queue>
 
 using namespace std;
@@ -38,6 +38,15 @@ enum class Table {
 
 typedef vector<vector<Table>> StageArray;
 
+struct Size {
+	int w;
+	int h;
+
+	Size() : Size(0, 0) {}
+	Size(int _w, int _h) { w = _w; h = _h; }
+
+};
+
 struct Point {
 	int x;
 	int y;
@@ -54,6 +63,57 @@ struct Point {
 	const string toString() const { return to_string(x) + " " + to_string(y); }
 
 	operator bool() const { return !(x == -1 && y == -1); }
+
+	const bool operator<(const Point& p) const { return (y * 128 + x < p.y * 128 + p.x); }
+
+};
+
+template<typename Type>
+class Grid {
+public:
+
+	Grid() : Grid(Size(0, 0)) {}
+	Grid(int w, int h) : Grid(Size(w, h)) {}
+	Grid(const Size& s) {
+		this->s = s;
+		grid.resize(s.h);
+		for (auto& g : grid) g.resize(s.w);
+	}
+	Grid(int w, int h, Type v) : Grid(Size(w, h), v) {}
+	Grid(const Size& s, const Type v) {
+		this->s = s;
+		grid.resize(s.h);
+		for (auto& g : grid) g.resize(s.w, v);
+	}
+
+	const Type& operator[](const Point& p) const { return grid[p.y][p.x]; }
+	Type& operator[](const Point& p) { return grid[p.y][p.x]; }
+	const std::vector<Type>& operator[](int y) const { return grid[y]; }
+	std::vector<Type>& operator[](int y) { return grid[y]; }
+
+	const Size& size() const { return s; }
+
+	const std::string toString(const char c = ',') const {
+
+		std::string str;
+
+		for (size_t y = 0; y < grid.size(); y++)
+		{
+			for (size_t x = 0; x < grid[y].size(); x++)
+			{
+				str += std::to_string(grid[y][x]);
+				str += c;
+			}
+			str += "\n";
+		}
+
+		return str;
+	}
+
+private:
+
+	std::vector<std::vector<Type>> grid;
+	Size s;
 
 };
 
@@ -78,30 +138,31 @@ public:
 	friend Input;
 	friend const bool inside(const Point& p);
 
-	static const int Width() { return width; }
-	static const int Height() { return height; }
-	static const int MyId() { return myId; }
+	inline static const int Width() { return width; }
+	inline static const int Height() { return height; }
+	inline static const int MyId() { return myId; }
 
-	static const StageArray& Stage() { return stage; }
-	static const Table& Stage(const Point& p) { return stage[p.x][p.y]; }
+	inline static const StageArray& Stage() { return stage; }
+	inline static const Table& Stage(const Point& p) { return stage[p.x][p.y]; }
 
-	static const vector<vector<bool>>& BlockStage() { return blockStage; }
-	static const bool BlockStage(const Point& p) { return blockStage[p.x][p.y]; }
+	inline static const vector<vector<bool>>& BlockStage() { return blockStage; }
+	inline static const bool BlockStage(const Point& p) { return blockStage[p.x][p.y]; }
 
-	static const vector<vector<int>>& ItemStage() { return itemStage; }
-	static const int ItemStage(const Point& p) { return itemStage[p.x][p.y]; }
+	inline static const vector<vector<int>>& ItemStage() { return itemStage; }
+	inline static const int ItemStage(const Point& p) { return itemStage[p.x][p.y]; }
 
-	static const Entitie& My() { return my; }
-	static const Entitie& En() { return en; }
+	inline static const Entitie& My() { return my; }
+	inline static const vector<Entitie>& En() { return en; }
+	inline static const Entitie& En(const size_t n) { return en[n]; }
 
-	static const vector<Entitie>& MyB() { return myB; }
-	static const Entitie& MyB(const size_t n) { return myB[n]; }
+	inline static const vector<Entitie>& MyB() { return myB; }
+	inline static const Entitie& MyB(const size_t n) { return myB[n]; }
 
-	static const vector<Entitie>& EnB() { return enB; }
-	static const Entitie& EnB(const size_t n) { return enB[n]; }
+	inline static const vector<Entitie>& EnB() { return enB; }
+	inline static const Entitie& EnB(const size_t n) { return enB[n]; }
 
-	static const vector<Entitie>& Item() { return item; }
-	static const Entitie& Item(const size_t n) { return item[n]; }
+	inline static const vector<Entitie>& Item() { return item; }
+	inline static const Entitie& Item(const size_t n) { return item[n]; }
 
 private:
 
@@ -113,7 +174,7 @@ private:
 	static vector<vector<bool>> blockStage;
 	static vector<vector<int>> itemStage;
 	static Entitie my;
-	static Entitie en;
+	static vector<Entitie> en;
 	static vector<Entitie> myB;
 	static vector<Entitie> enB;
 
@@ -121,7 +182,7 @@ private:
 
 	static void EntitieReset() {
 		my = Entitie();
-		en = Entitie();
+		en.clear();
 		myB.clear();
 		enB.clear();
 		item.clear();
@@ -140,7 +201,7 @@ StageArray Share::stage;
 vector<vector<bool>> Share::blockStage;
 vector<vector<int>> Share::itemStage;
 Entitie Share::my;
-Entitie Share::en;
+vector<Entitie> Share::en;
 vector<Entitie> Share::myB;
 vector<Entitie> Share::enB;
 vector<Entitie> Share::item;
@@ -219,7 +280,7 @@ struct Input {
 					Share::my = Entitie(Point(x, y), param1, param2);
 				}
 				else
-					Share::en = Entitie(Point(x, y), param1, param2);
+					Share::en.push_back(Entitie(Point(x, y), param1, param2));
 			}
 			else if (entityType == Bomb)
 			{
@@ -248,76 +309,49 @@ struct Input {
 
 const Point Direction[] = { Point(0,-1),Point(-1,0),Point(1,0),Point(0,1) };
 
+template <class CharType>
+inline std::basic_ostream<CharType>& operator << (std::basic_ostream<CharType>& os, const Size& v) { return os << CharType('(') << (int)v.w << CharType(',') << (int)v.h << CharType(')'); }
+template <class CharType>
+inline std::basic_ostream<CharType>& operator << (std::basic_ostream<CharType>& os, const Point& v) { return os << CharType('(') << (int)v.x << CharType(',') << (int)v.y << CharType(')'); }
+
 const bool inside(const Point& p) { return (0 <= p.x && 0 <= p.y && p.x < Share::width && p.y < Share::height); }
 const int range(const Point& p1, const Point& p2) { return (abs(p1.x - p2.x) + abs(p1.y - p2.y)); }
 const bool isBox(const Table& t) { return (t == Table::EmptyBox || t == Table::RangeBox || t == Table::ExtraBox); }
 
-class AI {
+class BombSimulator {
 public:
 
-	const string think() {
-		string command = CMove + Point(Share::Width() - 1, Share::Height() - 1).toString();
+	void simulate(const vector<Entitie> myB = Share::MyB(), const vector<Entitie> enB = Share::EnB()) {
 
+		Grid<int> bombStage(Share::Width(), Share::Height(), 0);
 
-		if (!destination)
+		for (const auto& b : myB) bombStage[b.point] = b.val1;
+		for (const auto& b : enB) bombStage[b.point] = b.val1;
+
+		const int BombTimer = 8;
+		for (int i = 0; i < BombTimer; i++)
 		{
-			destination = search();
-			command = CMove + destination.toString();
-		}
+			for (int y = 0; y < Share::Height(); y++)
+			{
+				for (int x = 0; x < Share::Width(); x++)
+				{
 
-		if (destination == Share::My().point)
-		{
-			if (destroyBox(destination) > 0)
-			{
-				command = CBomb + destination.toString();
-				if (Share::My().val1 > 0)
-				{
-					destination = Point();
-				}
-			}
-			else
-			{
-				if (subDestinationFlag)
-				{
-					destination = subDestination;
-					subDestinationFlag = false;
-					command = CMove + destination.toString();
-				}
-				else
-				{
-					destination = Point();
 				}
 			}
 		}
-		else
-		{
 
-			if (minItemRange() <= 5)
-			{
-				const Point d = itemSearch();
-				if (d)
-				{
-					subDestination = destination;
-					subDestinationFlag = true;
-					destination = d;
-				}
-			}
-
-			command = CMove + destination.toString();
-		}
-
-		return command;
 	}
 
 private:
 
-	/// <summary>目的地</summary>
-	Point destination;
+	vector<set<Point>> danger;
 
-	bool subDestinationFlag = false;
-	Point subDestination;
+};
 
-	const Point search(const int r = 8) const {
+class Search {
+public:
+
+	const Point bocSearch(const int r = 8) const {
 
 		const Point myPoint = Share::My().point;
 
@@ -516,6 +550,81 @@ private:
 		return itemPoint;
 	}
 
+
+private:
+
+
+
+};
+
+class AI {
+public:
+
+	const string think() {
+		string command = CMove + Point(Share::Width() - 1, Share::Height() - 1).toString();
+
+		bombSimulator.simulate();
+
+		if (!destination)
+		{
+			destination = search.bocSearch();
+			command = CMove + destination.toString();
+		}
+
+		if (destination == Share::My().point)
+		{
+			if (search.destroyBox(destination) > 0)
+			{
+				command = CBomb + destination.toString();
+				if (Share::My().val1 > 0)
+				{
+					destination = Point();
+				}
+			}
+			else
+			{
+				if (subDestinationFlag)
+				{
+					destination = subDestination;
+					subDestinationFlag = false;
+					command = CMove + destination.toString();
+				}
+				else
+				{
+					destination = Point();
+				}
+			}
+		}
+		else
+		{
+
+			if (search.minItemRange() <= 5)
+			{
+				const Point d = search.itemSearch();
+				if (d)
+				{
+					subDestination = destination;
+					subDestinationFlag = true;
+					destination = d;
+				}
+			}
+
+			command = CMove + destination.toString();
+		}
+
+		return command;
+	}
+
+private:
+
+	/// <summary>目的地</summary>
+	Point destination;
+
+	bool subDestinationFlag = false;
+	Point subDestination;
+
+	Search search;
+	BombSimulator bombSimulator;
 };
 
 int main()
