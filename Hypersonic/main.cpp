@@ -329,15 +329,7 @@ const bool isBox(const Table& t) { return (t == Table::EmptyBox || t == Table::R
 class BombSimulator {
 public:
 
-	void simulate(const Entities myB = Share::MyB(), const Entities enB = Share::EnB(), const Entities item = Share::Item(), Grid<Table> stage = Share::Stage()) {
-
-		Grid<pair<int, int>> bombStage(Share::Width(), Share::Height(), { 0,0 });
-		Grid<int> itemStage(bombStage.size(), 0);
-
-		for (const auto& b : myB) bombStage[b.point] = { b.val1,b.val2 };
-		for (const auto& b : enB) bombStage[b.point] = { b.val1,b.val2 };
-
-		for (const auto& i : item) itemStage[i.point] = i.val1;
+	void simulate(Grid<pair<int, int>> bombStage, Grid<int> itemStage, Grid<Table> stage) {
 
 		const int BombTimer = 8;
 		dangers.resize(8);
@@ -350,7 +342,7 @@ public:
 			{
 				for (int x = 0; x < Share::Width(); x++)
 				{
-					if (bombStage[y][x].first == 2)
+					if (bombStage[y][x].first == 1)
 					{
 						auto d = destroy(Point(x, y), bombStage, itemStage, stage);
 						for (const auto b : d) danger.insert(b);
@@ -403,7 +395,7 @@ public:
 		{
 			for (int x = 0; x < Share::Width(); x++)
 			{
-				if (bomb[y][x].first == 2)
+				if (bomb[y][x].first == 1)
 				{
 					auto d = destroy(Point(x, y), bomb, item, stage);
 					for (const auto b : d) danger.insert(b);
@@ -724,6 +716,7 @@ public:
 		now.stage = Share::Stage();
 		now.command = "";
 		now.score = 0;
+		now.box = 0;
 
 		now.bomb.resize(Share::Width(), Share::Height(), { 0,0 });
 		now.item.resize(Share::Width(), Share::Height(), 0);
@@ -741,7 +734,7 @@ public:
 			priority_queue<Data> next;
 
 			int width = 0;
-			const double Decay = 0.9;
+			const double Decay = 1;
 			while (!que.empty() && width < 10)
 			{
 				for (const auto& dire : Move)
@@ -755,15 +748,15 @@ public:
 						int boxNum = 0;
 						if (turn == 0) d.command = CMove + p.toString();
 						boxNum = 0;
-						if (!bombSimulator.next(p, d.bomb, d.item, d.stage, boxNum))
+						if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage, boxNum))
 						{
 							d.my.point = p;
 							if (d.item[p] == ItemExtra) d.my.val1++;
 							if (d.item[p] == ItemRange) d.my.val2++;
 							d.item[p] = 0;
 							//d.my.val1 += bombSimulator.getBomb();
-
-							d.score += (int)(eval(d, boxNum) * pow(Decay, turn));
+							d.box += boxNum;
+							d.score += (int)(eval(d) * pow(Decay, turn));
 
 							next.push(d);
 						}
@@ -772,17 +765,17 @@ public:
 						if (d.my.val1 > 0)
 						{
 							if (turn == 0) d.command = CBomb + p.toString();
-							boxNum = 0;
 							d.bomb[d.my.point] = { 8,d.my.val2 };
-							if (!bombSimulator.next(p, d.bomb, d.item, d.stage, boxNum))
+							boxNum = 0;
+							if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage, boxNum))
 							{
 								d.my.point = p;
 								if (d.item[p] == ItemExtra) d.my.val1++;
 								if (d.item[p] == ItemRange) d.my.val2++;
 								d.item[p] = 0;
 								//d.my.val1 += bombSimulator.getBomb();
-
-								d.score += (int)(eval(d, boxNum) * pow(Decay, turn));
+								d.box += boxNum;
+								d.score += (int)(eval(d) * pow(Decay, turn));
 
 								next.push(d);
 							}
@@ -818,6 +811,7 @@ private:
 
 	struct Data {
 		int score;
+		int box;
 		Entitie my;
 		Grid<pair<int, int>> bomb;
 		Grid<int> item;
@@ -828,10 +822,10 @@ private:
 
 	};
 
-	const int eval(const Data& data, const int boxNum) const {
+	const int eval(const Data& data) const {
 		int s = 0;
 
-		s += boxNum * 1000;
+		s += data.box * 10;
 		s -= data.my.val1 * 10;
 
 		s += min(data.my.val1, 7) * 10;
