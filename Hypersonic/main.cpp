@@ -771,12 +771,12 @@ public:
 		que.push(now);
 
 		const double Decay = 0.9;
-		for (int turn = 0; turn < 40; turn++)
+		for (int turn = 0; turn < 8; turn++)
 		{
 			priority_queue<Data> next;
 
 			int width = 0;
-			while (!que.empty() && width < 10)
+			while (!que.empty() && width < 40)
 			{
 				for (const auto& dire : Move)
 				{
@@ -835,7 +835,7 @@ public:
 			return que.top().command[0];
 		}
 
-		string command = CMove + Point(Share::Width() - 1, Share::Height() - 1).toString();
+		string command = CMove + Point(Share::Width() / 2, Share::Height() / 2).toString();
 
 		return command;
 	}
@@ -864,7 +864,7 @@ private:
 		int s = 0;
 
 		s += data.box * 10;
-		s -= data.my.val1 * 10;
+		s -= data.my.val1 * 5;
 
 		//s += range(Share::My().point, data.my.point);
 
