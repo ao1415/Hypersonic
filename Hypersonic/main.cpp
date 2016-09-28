@@ -5,6 +5,7 @@
 #include <set>
 #include <queue>
 #include <map>
+#include <chrono>
 
 using namespace std;
 
@@ -383,7 +384,7 @@ public:
 		return false;
 	}
 
-	bool next(const Point& myPoint, Grid<pair<int, int>>& bomb, Grid<int>& item, Grid<Table>& stage, int& boxNum) {
+	bool next(const Point& myPoint, Grid<pair<int, int>>& bomb, Grid<int>& item, Grid<Table>& stage) {
 
 		set<Point> danger;
 		myBombCount = 0;
@@ -415,18 +416,15 @@ public:
 			{
 				stage[p] = Table::Cell;
 				item[p] = ItemExtra;
-				boxNum++;
 			}
 			else if (stage[p] == Table::RangeBox)
 			{
 				stage[p] = Table::Cell;
 				item[p] = ItemRange;
-				boxNum++;
 			}
 			else if (stage[p] == Table::EmptyBox)
 			{
 				stage[p] = Table::Cell;
-				boxNum++;
 			}
 		}
 
@@ -434,6 +432,49 @@ public:
 	}
 
 	const int getBomb() const { return myBombCount; }
+
+	const int destroyBox(const Point& point, const int blast, Grid<pair<int, int>>& bomb, Grid<int> item, Grid<Table>& stage) const {
+		int box = 0;
+
+		const auto insert = [&](const Point& p) {
+			if (inside(p))
+			{
+				if (item[p] != 0 || stage[p] != Table::Cell || bomb[p].first > 0)
+				{
+					if (isBox(stage[p]))
+						box++;
+
+					return true;
+				}
+			}
+			return false;
+		};
+
+		for (int dy = 1; dy < blast; dy++)
+		{
+			const Point nextPoint = point + Point(0, dy);
+			if (insert(nextPoint)) break;
+		}
+		for (int dy = 1; dy < blast; dy++)
+		{
+			const Point nextPoint = point + Point(0, -dy);
+			if (insert(nextPoint)) break;
+		}
+
+		for (int dx = 1; dx < blast; dx++)
+		{
+			const Point nextPoint = point + Point(dx, 0);
+			if (insert(nextPoint)) break;
+		}
+		for (int dx = 1; dx < blast; dx++)
+		{
+			const Point nextPoint = point + Point(-dx, 0);
+			if (insert(nextPoint)) break;
+		}
+
+
+		return box;
+	}
 
 private:
 
@@ -496,7 +537,7 @@ private:
 class Search {
 public:
 
-	const Point bocSearch(const int r = 8) const {
+	const Point boxSearch(const int r = 8) const {
 
 		const Point myPoint = Share::My().point;
 
@@ -740,46 +781,40 @@ public:
 				for (const auto& dire : Move)
 				{
 					Data d;
-					int boxNum = 0;
 					const Point p = que.top().my.point + dire;
 
 					if (inside(p) && que.top().stage[p] == Table::Cell && que.top().bomb[p].first <= 0)
 					{
+						const auto func = [&]() {
+							d.my.point = p;
+							if (d.item[p] == ItemExtra) d.my.val1++;
+							if (d.item[p] == ItemRange) d.my.val2++;
+							d.item[p] = 0;
+							d.my.val1 += bombSimulator.getBomb();
+
+							d.score += (int)(eval(d) * pow(Decay, turn));
+
+							next.push(d);
+						};
+
 						d = que.top();
 						if (d.my.val1 > 0)
 						{
 							d.command.push_back(CBomb + p.toString());
 							d.bomb[d.my.point] = { 8,d.my.val2 };
 							d.my.val1--;
-							boxNum = 0;
-							if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage, boxNum))
+							d.box += bombSimulator.destroyBox(d.my.point, d.my.val2, d.bomb, d.item, d.stage);
+							if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage))
 							{
-								d.my.point = p;
-								if (d.item[p] == ItemExtra) d.my.val1++;
-								if (d.item[p] == ItemRange) d.my.val2++;
-								d.item[p] = 0;
-								d.my.val1 += bombSimulator.getBomb();
-								d.box += boxNum;
-								d.score += (int)(eval(d) * pow(Decay, turn));
-
-								next.push(d);
+								func();
 							}
 						}
 
 						d = que.top();
 						d.command.push_back(CMove + p.toString());
-						boxNum = 0;
-						if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage, boxNum))
+						if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage))
 						{
-							d.my.point = p;
-							if (d.item[p] == ItemExtra) d.my.val1++;
-							if (d.item[p] == ItemRange) d.my.val2++;
-							d.item[p] = 0;
-							d.my.val1 += bombSimulator.getBomb();
-							d.box += boxNum;
-							d.score += (int)(eval(d) * pow(Decay, turn));
-
-							next.push(d);
+							func();
 						}
 
 					}
@@ -796,7 +831,7 @@ public:
 		if (!que.empty())
 		{
 			cerr << "Score:" << que.top().score << endl;
-			for (const auto& c : que.top().command) cerr << c << endl;
+			//for (const auto& c : que.top().command) cerr << c << endl;
 			return que.top().command[0];
 		}
 
@@ -851,6 +886,12 @@ int main()
 	{
 		Input::loop();
 
-		cout << ai.think() << " ao1415" << endl;
+		auto start = std::chrono::system_clock::now();
+		const string command = ai.think();
+		auto end = std::chrono::system_clock::now();
+		auto dur = end - start;
+		auto msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+
+		cout << command << " " << msec << "ms" << endl;
 	}
 }
