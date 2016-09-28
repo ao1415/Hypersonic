@@ -127,6 +127,28 @@ private:
 
 };
 
+class Stopwatch {
+public:
+
+	void start() {
+		s = chrono::system_clock::now();
+		e = s;
+	}
+	void stop() {
+		e = chrono::system_clock::now();
+	}
+
+	const long long second() const { return chrono::duration_cast<chrono::seconds>(e - s).count(); }
+	const long long millisecond() const { return chrono::duration_cast<chrono::milliseconds>(e - s).count(); }
+	const long long microseconds() const { return chrono::duration_cast<chrono::microseconds>(e - s).count(); }
+
+private:
+
+	chrono::time_point<chrono::system_clock> s;
+	chrono::time_point<chrono::system_clock> e;
+
+};
+
 struct Entitie {
 
 	Entitie() : Entitie(Point(), 0, 0) {}
@@ -881,17 +903,16 @@ int main()
 	Input::first();
 
 	AI ai;
+	Stopwatch sw;
 
 	while (true)
 	{
 		Input::loop();
 
-		auto start = std::chrono::system_clock::now();
+		sw.start();
 		const string command = ai.think();
-		auto end = std::chrono::system_clock::now();
-		auto dur = end - start;
-		auto msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+		sw.stop();
 
-		cout << command << " " << msec << "ms" << endl;
+		cout << command << " " << sw.millisecond() << "ms" << endl;
 	}
 }
