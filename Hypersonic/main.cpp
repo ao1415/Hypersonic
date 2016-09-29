@@ -765,6 +765,9 @@ private:
 
 };
 
+int maxBoxRange;
+int minBoxRange;
+
 class AI {
 public:
 
@@ -894,6 +897,25 @@ private:
 		s += min(data.my.val1, 7) * 10;
 		s += min(data.my.val2, 8) * 6;
 
+		int boxRangeScore = 0;
+		for (int y = 0; y < Share::Height(); y++)
+		{
+			for (int x = 0; x < Share::Width(); x++)
+			{
+				if (isBox(data.stage[Point(x, y)]))
+				{
+					const int r = range(data.my.point, Point(x, y));
+					boxRangeScore += 600 - (r*r);
+				}
+			}
+		}
+
+		maxBoxRange = max(maxBoxRange, boxRangeScore);
+		minBoxRange = min(minBoxRange, boxRangeScore);
+		if (boxRangeScore > 0)
+			boxRangeScore = max(boxRangeScore, 1000);
+		s += boxRangeScore / 1000;
+
 		return s;
 	}
 
@@ -910,9 +932,15 @@ int main()
 	{
 		Input::loop();
 
+		maxBoxRange = 0;
+		minBoxRange = INT32_MAX;
+
 		sw.start();
 		const string command = ai.think();
 		sw.stop();
+
+		cerr << "max:" << maxBoxRange << endl;
+		cerr << "min:" << minBoxRange << endl;
 
 		cout << command << " " << sw.millisecond() << "ms" << endl;
 	}
