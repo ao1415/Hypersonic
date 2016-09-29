@@ -793,7 +793,8 @@ public:
 		que.push(now);
 
 		const double Decay = 0.9;
-		for (int turn = 0; turn < 8; turn++)
+		const int Turn = 10;
+		for (int turn = 0; turn < Turn; turn++)
 		{
 			priority_queue<Data> next;
 
@@ -820,7 +821,7 @@ public:
 						};
 
 						d = que.top();
-						if (d.my.val1 > 0)
+						if (turn <= Turn - 8 && d.my.val1 > 0)
 						{
 							d.command.push_back(CBomb + p.toString());
 							d.bomb[d.my.point] = { 8,d.my.val2 };
