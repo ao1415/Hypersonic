@@ -504,6 +504,21 @@ public:
 		return box;
 	}
 
+	const int destroyBoxCount(Grid<pair<int, int>> bomb, Grid<int> item, Grid<Table> stage) const {
+
+		for (int turn=0;turn<8;turn++)
+		{
+			for (int y = 0; y < Share::Width(); y++)
+			{
+				for (int x = 0; x < Share::Height(); x++)
+				{
+
+				}
+			}
+		}
+
+	}
+
 private:
 
 	vector<set<Point>> dangers;
