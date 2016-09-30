@@ -243,7 +243,7 @@ struct Input {
 	static void first() {
 		cin >> Share::width >> Share::height >> Share::myId;
 		cin.ignore();
-
+		//cerr << Share::width << " " << Share::height << " " << Share::myId << endl;
 		Share::stage.resize(Share::width, Share::height);
 
 	}
@@ -260,6 +260,7 @@ struct Input {
 			{
 				char c;
 				cin >> c;
+				//cerr << c;
 				switch (c)
 				{
 				case Cell:
@@ -288,9 +289,11 @@ struct Input {
 				}
 			}
 			cin.ignore();
+			//cerr << endl;
 		}
 		int entities;
 		cin >> entities; cin.ignore();
+		//cerr << entities << endl;
 
 		Share::EntitieReset();
 
@@ -303,6 +306,7 @@ struct Input {
 			int param2;
 			cin >> entityType >> owner >> x >> y >> param1 >> param2;
 			cin.ignore();
+			//cerr << entityType << " " << owner << " " << x << " " << y << " " << param1 << " " << param2 << endl;
 
 			if (entityType == Player)
 			{
@@ -351,53 +355,6 @@ const bool isBox(const Table& t) { return (t == Table::EmptyBox || t == Table::R
 
 class BombSimulator {
 public:
-
-	void simulate(Grid<pair<int, int>> bombStage, Grid<int> itemStage, Grid<Table> stage) {
-
-		const int BombTimer = 8;
-		dangers.resize(8);
-
-		for (int i = 0; i < BombTimer; i++)
-		{
-			set<Point> danger;
-
-			for (int y = 0; y < Share::Height(); y++)
-			{
-				for (int x = 0; x < Share::Width(); x++)
-				{
-					if (bombStage[y][x].first == 1)
-					{
-						auto d = destroy(Point(x, y), bombStage, itemStage, stage);
-						for (const auto b : d) danger.insert(b);
-					}
-					bombStage[y][x].first--;
-				}
-			}
-
-			for (const auto& p : danger)
-			{
-				if (itemStage[p] > 0)
-					itemStage[p] = 0;
-
-				if (stage[p] == Table::ExtraBox)
-				{
-					stage[p] = Table::Cell;
-					itemStage[p] = ItemExtra;
-				}
-				else if (stage[p] == Table::RangeBox)
-				{
-					stage[p] = Table::Cell;
-					itemStage[p] = ItemRange;
-				}
-				else if (stage[p] == Table::EmptyBox)
-					stage[p] = Table::Cell;
-			}
-
-			dangers[i] = danger;
-
-		}
-
-	}
 
 	const bool check(const Point& point) const {
 		for (size_t i = 0; i < dangers.size(); i++)
@@ -556,222 +513,13 @@ private:
 
 };
 
-class Search {
-public:
-
-	const Point boxSearch(const int r = 8) const {
-
-		const Point myPoint = Share::My().point;
-
-		Point maxPoint = myPoint;
-		int maxBox = 0;
-		int maxRange = 0;
-
-		const int CheckArrayDefault = -1;
-		vector<vector<int>> check;
-		check.resize(Share::Width());
-		for (auto& c : check) c.resize(Share::Height(), CheckArrayDefault);
-
-		queue<Point> que;
-		que.push(myPoint);
-		check[myPoint.x][myPoint.y] = 0;
-
-		while (!que.empty())
-		{
-			const auto point = que.front();
-			que.pop();
-			const int rng = check[point.x][point.y];
-
-			const int box = destroyBox(point);
-
-			if (box > maxBox)
-			{
-				maxBox = box;
-				maxRange = rng;
-				maxPoint = point;
-			}
-			else if (box == maxBox && rng > maxRange)
-			{
-				maxRange = rng;
-				maxPoint = point;
-			}
-
-			if (rng <= r)
-			{
-				for (const auto& dire : Direction)
-				{
-					const auto next = point + dire;
-					if (inside(next) && check[next.x][next.y] == CheckArrayDefault && Share::Stage(next) == Table::Cell)
-					{
-						que.push(next);
-						check[next.x][next.y] = rng + 1;
-					}
-				}
-			}
-		}
-
-		cerr << "P:" << maxPoint.toString() << endl;
-		cerr << "B:" << maxBox << endl;
-
-		return maxPoint;
-	}
-
-	const int destroyBox(const Point& point) const {
-
-		const int r = Share::My().val2;
-		int boxCount = 0;
-
-		for (int dy = 1; dy < r; dy++)
-		{
-			const Point nextPoint = point + Point(0, dy);
-			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
-			{
-				if (isBox(Share::Stage(nextPoint)))
-					boxCount++;
-				break;
-			}
-		}
-		for (int dy = 1; dy < r; dy++)
-		{
-			const Point nextPoint = point + Point(0, -dy);
-			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
-			{
-				if (isBox(Share::Stage(nextPoint)))
-					boxCount++;
-				break;
-			}
-		}
-
-		for (int dx = 1; dx < r; dx++)
-		{
-			const Point nextPoint = point + Point(dx, 0);
-			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
-			{
-				if (isBox(Share::Stage(nextPoint)))
-					boxCount++;
-				break;
-			}
-		}
-		for (int dx = 1; dx < r; dx++)
-		{
-			const Point nextPoint = point + Point(-dx, 0);
-			if (inside(nextPoint) && Share::BlockStage(nextPoint) == true)
-			{
-				if (isBox(Share::Stage(nextPoint)))
-					boxCount++;
-				break;
-			}
-		}
-
-		return boxCount;
-	}
-
-	const int minItemRange() const {
-
-		const auto my = Share::My();
-		const auto items = Share::Item();
-
-		const int ExtraPriority = 2;
-		const int RangePriority = 1;
-
-		const int RangeMax = 8;
-		const int ExtraMax = 8;
-
-		int itemRange = INT32_MAX;
-
-		for (const auto& item : items)
-		{
-			if (item.val1 == ItemRange)
-			{
-				if (my.val2 <= RangeMax)
-				{
-					itemRange = min(itemRange, range(my.point, item.point));
-				}
-			}
-			else if (item.val1 == ItemExtra)
-			{
-				if (my.val2 <= ExtraMax)
-				{
-					itemRange = min(itemRange, range(my.point, item.point));
-				}
-			}
-		}
-		return itemRange;
-	}
-
-	const Point itemSearch(const int r = 5) const {
-
-		const Point myPoint = Share::My().point;
-
-		Point itemPoint;
-		int minRange = INT32_MAX;
-
-		const int CheckArrayDefault = -1;
-		vector<vector<int>> check;
-		check.resize(Share::Width());
-		for (auto& c : check) c.resize(Share::Height(), CheckArrayDefault);
-
-		queue<Point> que;
-		que.push(myPoint);
-		check[myPoint.x][myPoint.y] = 0;
-
-		while (!que.empty())
-		{
-			const auto point = que.front();
-			que.pop();
-			const int rng = check[point.x][point.y];
-
-			if (Share::ItemStage(point) == ItemExtra)
-			{
-				if (minRange > rng)
-				{
-					minRange = rng;
-					itemPoint = point;
-				}
-			}
-			else if (Share::ItemStage(point) == ItemRange)
-			{
-				if (minRange > rng)
-				{
-					minRange = rng;
-					itemPoint = point;
-				}
-			}
-
-			if (rng <= r)
-			{
-				for (const auto& dire : Direction)
-				{
-					const auto next = point + dire;
-					if (inside(next) && check[next.x][next.y] == CheckArrayDefault && Share::Stage(next) == Table::Cell)
-					{
-						que.push(next);
-						check[next.x][next.y] = rng + 1;
-					}
-				}
-			}
-		}
-
-		cerr << "P:" << itemPoint.toString() << endl;
-		cerr << "R:" << minRange << endl;
-
-		return itemPoint;
-	}
-
-
-private:
-
-
-
-};
-
 int maxBoxRange;
 int minBoxRange;
 
 class AI {
 public:
 
-	//ビームサーチを実装する
+	//ビームサーチ
 	const string think() {
 
 		const Point Move[] = { Point(0,-1),Point(-1,0),Point(1,0),Point(0,1),Point(0,0) };
@@ -857,7 +605,7 @@ public:
 
 		if (!que.empty())
 		{
-			cerr << "Score:" << que.top().score << endl;
+			//cerr << "Score:" << que.top().score << endl;
 			//for (const auto& c : que.top().command) cerr << c << endl;
 			return que.top().command[0];
 		}
@@ -871,7 +619,6 @@ public:
 
 private:
 
-	Search search;
 	BombSimulator bombSimulator;
 
 	struct Data {
@@ -952,8 +699,8 @@ int main()
 		const string command = ai.think();
 		sw.stop();
 
-		cerr << "max:" << maxBoxRange << endl;
-		cerr << "min:" << minBoxRange << endl;
+		//cerr << "max:" << maxBoxRange << endl;
+		//cerr << "min:" << minBoxRange << endl;
 
 		cout << command << " " << sw.millisecond() << "ms" << endl;
 	}
