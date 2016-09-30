@@ -149,6 +149,48 @@ private:
 
 };
 
+class Timer {
+public:
+
+	static const int Second = 1;
+	static const int MilliSecond = 2;
+	static const int MicroSecond = 3;
+
+	void setTimer(const long long _time, const int _type) {
+		time = _time;
+		type = _type;
+	}
+
+	void start() { s = chrono::system_clock::now(); }
+
+	inline const bool check() const {
+		const auto e = chrono::system_clock::now();
+		long long t = 0;
+		switch (type)
+		{
+		case Second:
+			t = chrono::duration_cast<chrono::seconds>(e - s).count();
+			break;
+		case MilliSecond:
+			t = chrono::duration_cast<chrono::milliseconds>(e - s).count();
+			break;
+		case MicroSecond:
+			t = chrono::duration_cast<chrono::microseconds>(e - s).count();
+			break;
+		}
+		return t >= time;
+	}
+
+	operator bool() const { return check(); }
+
+private:
+
+	chrono::time_point<chrono::system_clock> s;
+	long long time = 0;
+	int type;
+
+};
+
 struct Entitie {
 
 	Entitie() : Entitie(Point(), 0, 0) {}
@@ -519,7 +561,7 @@ int minBoxRange;
 class AI {
 public:
 
-	//ビームサーチ
+	//chokudaiサーチ
 	const string think() {
 
 		const Point Move[] = { Point(0,-1),Point(-1,0),Point(1,0),Point(0,1),Point(0,0) };
