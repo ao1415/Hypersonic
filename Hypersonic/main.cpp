@@ -886,10 +886,10 @@ private:
 
 	};
 
-	const int eval(const Data& data) const {
+	const int eval(const Data& data) {
 		int s = 0;
 
-		s += data.box * 10;
+		s += data.box * 15;
 		s -= data.my.val1 * 5;
 
 		//s += range(Share::My().point, data.my.point);
@@ -913,8 +913,20 @@ private:
 		maxBoxRange = max(maxBoxRange, boxRangeScore);
 		minBoxRange = min(minBoxRange, boxRangeScore);
 		if (boxRangeScore > 0)
-			boxRangeScore = max(boxRangeScore, 1000);
-		s += boxRangeScore / 1000;
+		{
+			boxRangeScore = max(boxRangeScore, 2500);
+			boxRangeScore = min(boxRangeScore, 20000);
+		}
+		s += boxRangeScore / 100;
+
+		auto d = data;
+
+		for (const auto& enemy : Share::En())
+		{
+			d.bomb[enemy.point] = { 8,enemy.val2 };		
+		}
+		if (bombSimulator.next(d.my.point, d.bomb, d.item, d.stage))
+			s /= 2;
 
 		return s;
 	}
