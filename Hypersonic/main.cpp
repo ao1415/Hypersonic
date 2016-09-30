@@ -6,6 +6,7 @@
 #include <queue>
 #include <map>
 #include <chrono>
+#include <array>
 
 using namespace std;
 
@@ -156,6 +157,11 @@ public:
 	static const int MilliSecond = 2;
 	static const int MicroSecond = 3;
 
+	Timer() = default;
+	Timer(const long long _time, const int _type) {
+		setTimer(_time, _type);
+	}
+
 	void setTimer(const long long _time, const int _type) {
 		time = _time;
 		type = _type;
@@ -301,7 +307,8 @@ struct Input {
 			for (int x = 0; x < Share::Width(); x++)
 			{
 				char c;
-				cin >> c;
+				if (!(cin >> c)) exit(0);
+				//cin >> c;
 				//cerr << c;
 				switch (c)
 				{
@@ -582,74 +589,79 @@ public:
 
 		for (const auto& i : Share::Item()) now.item[i.point] = i.val1;
 
-		priority_queue<Data> que;
-		que.push(now);
-
 		const double Decay = 0.9;
+
 		const int Turn = 10;
-		for (int turn = 0; turn < Turn; turn++)
+		const int ChokudaiWidth = 3;
+
+		array<priority_queue<Data>, Turn> qData;
+		qData[0].push(now);
+
+		Timer timer(80, Timer::MilliSecond);
+		timer.start();
+		while (!timer)
 		{
-			priority_queue<Data> next;
-
-			int width = 0;
-			while (!que.empty() && width < 40)
+			for (int turn = 0; turn < Turn - 1; turn++)
 			{
-				for (const auto& dire : Move)
+				for (int i = 0; i < ChokudaiWidth; i++)
 				{
-					Data d;
-					const Point p = que.top().my.point + dire;
+					if (qData[turn].empty())
+						break;
 
-					if (inside(p) && que.top().stage[p] == Table::Cell && que.top().bomb[p].first <= 0)
+					for (const auto& dire : Move)
 					{
-						const auto func = [&]() {
-							const Point priP = d.my.point;
-							d.my.point = p;
-							if (d.item[p] == ItemExtra) d.my.val1++;
-							if (d.item[p] == ItemRange) d.my.val2++;
-							d.item[p] = 0;
-							d.my.val1 += bombSimulator.getBomb();
+						Data d;
+						const Point p = qData[turn].top().my.point + dire;
 
-							d.score += (int)(eval(d, priP) * pow(Decay, turn));
-
-							next.push(d);
-						};
-
-						d = que.top();
-						if (turn <= Turn - 8 && d.my.val1 > 0)
+						if (inside(p) && qData[turn].top().stage[p] == Table::Cell && qData[turn].top().bomb[p].first <= 0)
 						{
-							d.command.push_back(CBomb + p.toString());
-							d.bomb[d.my.point] = { 8,d.my.val2 };
-							d.my.val1--;
-							d.box += bombSimulator.destroyBox(d.my.point, d.my.val2, d.bomb, d.item, d.stage);
+							const auto func = [&]() {
+								const Point priP = d.my.point;
+								d.my.point = p;
+								if (d.item[p] == ItemExtra) d.my.val1++;
+								if (d.item[p] == ItemRange) d.my.val2++;
+								d.item[p] = 0;
+								d.my.val1 += bombSimulator.getBomb();
+
+								d.score += (int)(eval(d, priP) * pow(Decay, turn));
+
+								qData[turn + 1].push(d);
+							};
+
+							d = qData[turn].top();
+							if (turn <= Turn - 8 && d.my.val1 > 0)
+							{
+								d.command.push_back(CBomb + p.toString());
+								d.bomb[d.my.point] = { 8,d.my.val2 };
+								d.my.val1--;
+								d.box += bombSimulator.destroyBox(d.my.point, d.my.val2, d.bomb, d.item, d.stage);
+								if (!bombSimulator.next(d.my.point, p, d.bomb, d.item, d.stage))
+								{
+									func();
+								}
+							}
+
+							d = qData[turn].top();
+							d.command.push_back(CMove + p.toString());
 							if (!bombSimulator.next(d.my.point, p, d.bomb, d.item, d.stage))
 							{
 								func();
 							}
-						}
 
-						d = que.top();
-						d.command.push_back(CMove + p.toString());
-						if (!bombSimulator.next(d.my.point, p, d.bomb, d.item, d.stage))
-						{
-							func();
 						}
 
 					}
 
+					qData[turn].pop();
 				}
-
-				que.pop();
-				width++;
 			}
-
-			que.swap(next);
 		}
 
-		if (!que.empty())
+		if (!qData[Turn - 1].empty())
 		{
-			//cerr << "Score:" << que.top().score << endl;
-			//for (const auto& c : que.top().command) cerr << c << endl;
-			return que.top().command[0];
+			cerr << "Score:" << qData[Turn - 1].top().score << endl;
+			//for (const auto& c : qData[Turn - 1].top().command) cerr << c << endl;
+			return qData[Turn - 1].top().command[0];
 		}
 
 		string command = CMove + Point(Share::Width() / 2, Share::Height() / 2).toString();
