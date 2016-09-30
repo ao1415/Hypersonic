@@ -406,7 +406,7 @@ public:
 		return false;
 	}
 
-	bool next(const Point& myPoint, Grid<pair<int, int>>& bomb, Grid<int>& item, Grid<Table>& stage) {
+	bool next(const Point& myPoint, const Point& nextPoint, Grid<pair<int, int>>& bomb, Grid<int>& item, Grid<Table>& stage) {
 
 		set<Point> danger;
 		myBombCount = 0;
@@ -429,7 +429,7 @@ public:
 
 		for (const auto& p : danger)
 		{
-			if (p == myPoint) return true;
+			if (p == myPoint || p == nextPoint) return true;
 
 			if (item[p] > 0)
 				item[p] = 0;
@@ -812,13 +812,14 @@ public:
 					if (inside(p) && que.top().stage[p] == Table::Cell && que.top().bomb[p].first <= 0)
 					{
 						const auto func = [&]() {
+							const Point priP = d.my.point;
 							d.my.point = p;
 							if (d.item[p] == ItemExtra) d.my.val1++;
 							if (d.item[p] == ItemRange) d.my.val2++;
 							d.item[p] = 0;
 							d.my.val1 += bombSimulator.getBomb();
 
-							d.score += (int)(eval(d) * pow(Decay, turn));
+							d.score += (int)(eval(d, priP) * pow(Decay, turn));
 
 							next.push(d);
 						};
@@ -830,7 +831,7 @@ public:
 							d.bomb[d.my.point] = { 8,d.my.val2 };
 							d.my.val1--;
 							d.box += bombSimulator.destroyBox(d.my.point, d.my.val2, d.bomb, d.item, d.stage);
-							if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage))
+							if (!bombSimulator.next(d.my.point, p, d.bomb, d.item, d.stage))
 							{
 								func();
 							}
@@ -838,7 +839,7 @@ public:
 
 						d = que.top();
 						d.command.push_back(CMove + p.toString());
-						if (!bombSimulator.next(d.my.point, d.bomb, d.item, d.stage))
+						if (!bombSimulator.next(d.my.point, p, d.bomb, d.item, d.stage))
 						{
 							func();
 						}
@@ -886,7 +887,7 @@ private:
 
 	};
 
-	const int eval(const Data& data) {
+	const int eval(const Data& data, const Point& p) {
 		int s = 0;
 
 		s += data.box * 15;
@@ -923,10 +924,10 @@ private:
 
 		for (const auto& enemy : Share::En())
 		{
-			d.bomb[enemy.point] = { 8,enemy.val2 };		
+			d.bomb[enemy.point] = { 8,enemy.val2 };
 		}
-		if (bombSimulator.next(d.my.point, d.bomb, d.item, d.stage))
-			s /= 2;
+		if (bombSimulator.next(d.my.point, p, d.bomb, d.item, d.stage))
+			s = 0;
 
 		return s;
 	}
