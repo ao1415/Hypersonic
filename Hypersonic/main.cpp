@@ -132,11 +132,11 @@ class Stopwatch {
 public:
 
 	void start() {
-		s = chrono::system_clock::now();
+		s = chrono::high_resolution_clock::now();
 		e = s;
 	}
 	void stop() {
-		e = chrono::system_clock::now();
+		e = chrono::high_resolution_clock::now();
 	}
 
 	const long long second() const { return chrono::duration_cast<chrono::seconds>(e - s).count(); }
@@ -145,8 +145,8 @@ public:
 
 private:
 
-	chrono::time_point<chrono::system_clock> s;
-	chrono::time_point<chrono::system_clock> e;
+	chrono::time_point<chrono::high_resolution_clock> s;
+	chrono::time_point<chrono::high_resolution_clock> e;
 
 };
 
@@ -167,10 +167,10 @@ public:
 		type = _type;
 	}
 
-	void start() { s = chrono::system_clock::now(); }
+	void start() { s = chrono::high_resolution_clock::now(); }
 
 	inline const bool check() const {
-		const auto e = chrono::system_clock::now();
+		const auto e = chrono::high_resolution_clock::now();
 		long long t = 0;
 		switch (type)
 		{
@@ -191,7 +191,7 @@ public:
 
 private:
 
-	chrono::time_point<chrono::system_clock> s;
+	chrono::time_point<chrono::high_resolution_clock> s;
 	long long time = 0;
 	int type;
 
