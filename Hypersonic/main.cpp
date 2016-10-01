@@ -26,6 +26,9 @@ const int ItemExtra = 2;
 const string CMove = "MOVE ";
 const string CBomb = "BOMB ";
 
+const int Width = 13;
+const int Height = 11;
+
 enum class Table {
 	Cell,
 	/// <summary>‹ó</summary>
@@ -89,19 +92,22 @@ public:
 
 	const Type& operator[](const Point& p) const { return grid[p.y][p.x]; }
 	Type& operator[](const Point& p) { return grid[p.y][p.x]; }
-	const std::vector<Type>& operator[](int y) const { return grid[y]; }
-	std::vector<Type>& operator[](int y) { return grid[y]; }
+	const std::array<Type, Width>& operator[](int y) const { return grid[y]; }
+	std::array<Type, Width>& operator[](int y) { return grid[y]; }
 
 	const Size& size() const { return s; }
 	void resize(int w, int h) { resize(Size(w, h)); }
 	void resize(const Size& s) {
-		grid.resize(s.h);
-		for (auto& g : grid) g.resize(s.w);
+		//grid.resize(s.h);
+		//for (auto& g : grid) g.resize(s.w);
+		this->s = s;
 	}
 	void resize(int w, int h, const Type v) { resize(Size(w, h), v); }
 	void resize(const Size& s, const Type v) {
-		grid.resize(s.h);
-		for (auto& g : grid) g.resize(s.w, v);
+		//grid.resize(s.h);
+		//for (auto& g : grid) g.resize(s.w, v);
+		for (auto& g : grid) g.fill(v);
+		this->s = s;
 	}
 
 	const std::string toString(const char c = ',') const {
@@ -121,9 +127,13 @@ public:
 		return str;
 	}
 
+	void fill(const Type& v) {
+		for (auto& g : grid) g.fill(v);
+	}
+
 private:
 
-	std::vector<std::vector<Type>> grid;
+	std::array<std::array<Type, Width>, Height> grid;
 	Size s;
 
 };
@@ -435,7 +445,7 @@ public:
 
 		for (const auto& p : danger)
 		{
-			if (p == myPoint || p == nextPoint) return true;
+			//if (p == myPoint || p == nextPoint) return true;
 
 			if (item[p] > 0)
 				item[p] = 0;
@@ -456,7 +466,59 @@ public:
 			}
 		}
 
+		if (danger.find(myPoint) != danger.end() || danger.find(nextPoint) != danger.end())
+			return true;
+
 		return false;
+	}
+
+	const vector<Grid<int>> getBlastGrid(Grid<pair<int, int>> bomb, Grid<int> item, Grid<Table> stage, const int turn) {
+
+		vector<Grid<int>> blastGrid(turn);
+		for (auto& grid : blastGrid) grid.fill(0);
+
+		for (int i = 0; i < turn; i++)
+		{
+			set<Point> danger;
+
+			for (int y = 0; y < Share::Height(); y++)
+			{
+				for (int x = 0; x < Share::Width(); x++)
+				{
+					if (bomb[y][x].first == 1)
+					{
+						auto d = destroy(Point(x, y), bomb, item, stage);
+						for (const auto b : d) danger.insert(b);
+					}
+					bomb[y][x].first--;
+				}
+			}
+
+			for (const auto& p : danger)
+			{
+				if (item[p] > 0)
+					item[p] = 0;
+
+				if (stage[p] == Table::ExtraBox)
+				{
+					stage[p] = Table::Cell;
+					item[p] = ItemExtra;
+				}
+				else if (stage[p] == Table::RangeBox)
+				{
+					stage[p] = Table::Cell;
+					item[p] = ItemRange;
+				}
+				else if (stage[p] == Table::EmptyBox)
+				{
+					stage[p] = Table::Cell;
+				}
+				blastGrid[i][p] = 1;
+			}
+
+		}
+
+		return blastGrid;
 	}
 
 	const int getBomb() const { return myBombCount; }
@@ -506,7 +568,7 @@ public:
 
 	const int destroyBoxCount(Grid<pair<int, int>> bomb, Grid<int> item, Grid<Table> stage) const {
 
-		for (int turn=0;turn<8;turn++)
+		for (int turn = 0; turn < 8; turn++)
 		{
 			for (int y = 0; y < Share::Width(); y++)
 			{
@@ -580,6 +642,9 @@ private:
 int maxBoxRange;
 int minBoxRange;
 
+long long maxSimulatorTime;
+long long minSimulatorTime;
+
 class AI {
 public:
 
@@ -604,15 +669,60 @@ public:
 
 		for (const auto& i : Share::Item()) now.item[i.point] = i.val1;
 
-		const double Decay = 0.9;
+		/*
+		for (const auto& enemy : Share::En())
+		{
+		if (enemy.val1 > 0)
+		now.bomb[enemy.point] = { 8,enemy.val2 };
+		}
+		*/
+
+		const auto check = [](const Point& point, const vector<Grid<int>>& blast, const Grid<pair<int, int>>& bomb, const Grid<Table>& stage, const int turn) {
+
+			queue<Point> que;
+
+			que.push(point);
+
+			set<Point> points;
+			points.insert(point);
+
+			for (size_t i = turn; i < blast.size() - 1; i++)
+			{
+				queue<Point> nque;
+				set<Point> nextPoints;
+
+				for (const auto& p : points)
+				{
+					for (const auto& dire : Direction)
+					{
+						const Point nextP = p + dire;
+						if (inside(nextP) && bomb[nextP].first == 0 && stage[nextP] == Table::Cell)
+						{
+							if (blast[i][nextP] == 0 && blast[i + 1][nextP] == 0)
+								nextPoints.insert(nextP);
+						}
+					}
+					if (blast[i + 1][p] == 0)
+						nextPoints.insert(p);
+				}
+				points.swap(nextPoints);
+
+			}
+
+			return !que.empty();
+		};
+
+		const double Decay = 1.0;
 
 		const int Turn = 10;
-		const int ChokudaiWidth = 3;
+		const int ChokudaiWidth = 5;
+
+		const auto blastGrid = bombSimulator.getBlastGrid(now.bomb, now.item, now.stage, Turn);
 
 		array<priority_queue<Data>, Turn> qData;
 		qData[0].push(now);
 
-		Timer timer(80, Timer::MilliSecond);
+		Timer timer(90, Timer::MilliSecond);
 		timer.start();
 		while (!timer)
 		{
@@ -640,7 +750,7 @@ public:
 
 								d.score += (int)(eval(d, priP) * pow(Decay, turn));
 
-								qData[turn + 1].push(d);
+								qData[turn + 1].emplace(d);
 							};
 
 							d = qData[turn].top();
@@ -652,7 +762,16 @@ public:
 								d.box += bombSimulator.destroyBox(d.my.point, d.my.val2, d.bomb, d.item, d.stage);
 								if (!bombSimulator.next(d.my.point, p, d.bomb, d.item, d.stage))
 								{
-									func();
+									if (check(p, blastGrid, d.bomb, d.stage, turn))
+									{
+										func();
+									}
+									else
+									{
+										d.score *= 0.8;
+										func();
+										cerr << "‹l‚Ý–hŽ~‚Ì‚Í‚¸" << endl;
+									}
 								}
 							}
 
@@ -660,7 +779,16 @@ public:
 							d.command.push_back(CMove + p.toString());
 							if (!bombSimulator.next(d.my.point, p, d.bomb, d.item, d.stage))
 							{
-								func();
+								if (check(p, blastGrid, d.bomb, d.stage, turn))
+								{
+									func();
+								}
+								else
+								{
+									d.score *= 0.8;
+									func();
+									cerr << "‹l‚Ý–hŽ~‚Ì‚Í‚¸" << endl;
+								}
 							}
 
 						}
@@ -680,11 +808,9 @@ public:
 		}
 
 		string command = CMove + Point(Share::Width() / 2, Share::Height() / 2).toString();
-
+		cerr << "‹l‚Ý‚Å‚·" << endl;
 		return command;
 	}
-
-
 
 private:
 
@@ -706,13 +832,18 @@ private:
 	const int eval(const Data& data, const Point& p) {
 		int s = 0;
 
-		s += data.box * 15;
-		s -= data.my.val1 * 5;
+		s += data.box * 15 * 100;
+		s -= data.my.val1 * 5 * 100;
 
-		//s += range(Share::My().point, data.my.point);
+		s += min(data.my.val1, 7) * 10 * 100;
+		s += min(data.my.val2, 8) * 6 * 100;
 
-		s += min(data.my.val1, 7) * 10;
-		s += min(data.my.val2, 8) * 6;
+		int playerRange = INT32_MAX;
+		for (const auto& player : Share::En())
+			playerRange = min(playerRange, range(player.point, data.my.point));
+
+		s += playerRange * 2 * 50;
+		s += range(Share::My().point, data.my.point) * 2 * 50;
 
 		int boxRangeScore = 0;
 		for (int y = 0; y < Share::Height(); y++)
@@ -729,12 +860,13 @@ private:
 
 		maxBoxRange = max(maxBoxRange, boxRangeScore);
 		minBoxRange = min(minBoxRange, boxRangeScore);
+
 		if (boxRangeScore > 0)
 		{
-			boxRangeScore = max(boxRangeScore, 2500);
+			boxRangeScore = max(boxRangeScore, 0);
 			boxRangeScore = min(boxRangeScore, 20000);
 		}
-		s += boxRangeScore / 100;
+		s += boxRangeScore / 100 * 100;
 
 		auto d = data;
 
@@ -742,8 +874,15 @@ private:
 		{
 			d.bomb[enemy.point] = { 8,enemy.val2 };
 		}
+
+		Stopwatch sw;
+		sw.start();
 		if (bombSimulator.next(d.my.point, p, d.bomb, d.item, d.stage))
 			s = 0;
+		sw.stop();
+
+		maxSimulatorTime = max(maxSimulatorTime, sw.microseconds());
+		minSimulatorTime = min(minSimulatorTime, sw.microseconds());
 
 		return s;
 	}
@@ -763,13 +902,15 @@ int main()
 
 		maxBoxRange = 0;
 		minBoxRange = INT32_MAX;
+		maxSimulatorTime = 0;
+		minSimulatorTime = INT32_MAX;
 
 		sw.start();
 		const string command = ai.think();
 		sw.stop();
 
-		//cerr << "max:" << maxBoxRange << endl;
-		//cerr << "min:" << minBoxRange << endl;
+		cerr << "max:" << maxSimulatorTime << endl;
+		cerr << "min:" << minSimulatorTime << endl;
 
 		cout << command << " " << sw.millisecond() << "ms" << endl;
 	}
