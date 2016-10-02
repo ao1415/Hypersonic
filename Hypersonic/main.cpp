@@ -770,7 +770,7 @@ public:
 									{
 										d.score *= 0.8;
 										func();
-										cerr << "‹l‚Ý–hŽ~‚Ì‚Í‚¸" << endl;
+										//cerr << "‹l‚Ý–hŽ~‚Ì‚Í‚¸" << endl;
 									}
 								}
 							}
@@ -787,7 +787,7 @@ public:
 								{
 									d.score *= 0.8;
 									func();
-									cerr << "‹l‚Ý–hŽ~‚Ì‚Í‚¸" << endl;
+									//cerr << "‹l‚Ý–hŽ~‚Ì‚Í‚¸" << endl;
 								}
 							}
 
@@ -909,8 +909,8 @@ int main()
 		const string command = ai.think();
 		sw.stop();
 
-		cerr << "max:" << maxSimulatorTime << endl;
-		cerr << "min:" << minSimulatorTime << endl;
+		//cerr << "max:" << maxSimulatorTime << endl;
+		//cerr << "min:" << minSimulatorTime << endl;
 
 		cout << command << " " << sw.millisecond() << "ms" << endl;
 	}
