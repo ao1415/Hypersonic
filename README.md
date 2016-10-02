@@ -1,5 +1,5 @@
 # Condingame Contest "Hypersonic"
-# orignal
+# master
 <b>実行期間</b><br>
 Wood～Silver<br>
 <b>概要</b><br>
