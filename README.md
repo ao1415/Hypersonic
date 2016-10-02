@@ -1,13 +1,13 @@
 # Condingame Contest "Hypersonic"
 # master
 <b>実行期間</b><br>
-Wood～Silver<br>
+Wood～Bronze<br>
 <b>概要</b><br>
 箱が多く壊せるところに移動し、爆弾を置くだけ<br>
 
 # beam
 <b>実行期間</b><br>
-Silver～Gold<br>
+Bronze～Gold<br>
 <b>概要</b><br>
 ビームサーチを導入し、10ターン先まで探査した<br>
 
