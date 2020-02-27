@@ -1,5 +1,5 @@
 # Condingame Contest "Hypersonic"
-# master
+# Bronze
 <b>実行期間</b><br>
 Wood～Bronze<br>
 <b>概要</b><br>
