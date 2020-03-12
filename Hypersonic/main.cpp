@@ -7,17 +7,20 @@
 #include <set>
 #include <map>
 #include <queue>
+#include <stack>
 
 #include <chrono>
 #include <algorithm>
 #include <memory>
+
+#include <bitset>
 
 using namespace std;
 
 #define forange(counter, end) forstep(counter, 0, end)
 #define forstep(counter, begin, end) forstep_type(size_t, counter, begin, end)
 #define forange_type(type, counter, end) forstep_type(type, counter, 0, end)
-#define forstep_type(type, counter, begin, end) for (type counter = begin; counter < end; counter++)
+#define forstep_type(type, counter, begin, end) for (type counter = begin, forstep_type_end_##counter = end; counter < forstep_type_end_##counter; counter++)
 
 #pragma region 定数宣言
 
@@ -41,17 +44,24 @@ namespace Object {
 
 	const int MaxRounds = 200;
 
+	const int MaxSearchTurn = 12;
+	const int MaxBombTurn = 8;
+
 	enum class Cell {
 		/// <summary>空</summary>
 		Empty,
 		/// <summary>空箱</summary>
-		EmptyBox,
+		BoxEmpty,
 		/// <summary>火力箱</summary>
-		RangeBox,
+		BoxRange,
 		/// <summary>ボム箱</summary>
-		BombBox,
+		BoxBomb,
 		/// <summary>壁</summary>
 		Wall,
+		/// <summary>火力アイテム</summary>
+		ItemRange,
+		/// <summary>ボムアイテム</summary>
+		ItemBomb,
 		Size
 	};
 }
@@ -90,10 +100,8 @@ public:
 
 	FixedGrid() = default;
 	FixedGrid(const Type& v) { fill(v); }
-	FixedGrid(const FixedGrid& other) = default;
-	FixedGrid(FixedGrid&& other) {
-		m_data = std::move(other.m_data);
-	}
+	FixedGrid(const FixedGrid&) = default;
+	FixedGrid(FixedGrid&&) = default;
 
 	FixedGrid& operator=(const FixedGrid& other) = default;
 	FixedGrid& operator=(FixedGrid&& other) = default;
@@ -393,6 +401,8 @@ public:
 		auto& share = Share::Get();
 		auto& stage = share.stage;
 
+		share.boxLimit.fill(0);
+
 		forange(y, stage.height())
 		{
 			forange(x, stage.width())
@@ -403,9 +413,9 @@ public:
 				switch (c)
 				{
 				case Empty: stage[y][x] = Cell::Empty; break;
-				case EmptyBox: stage[y][x] = Cell::EmptyBox; share.boxLimit[y][x] = MaxRounds; break;
-				case RangeBox: stage[y][x] = Cell::RangeBox; share.boxLimit[y][x] = MaxRounds; break;
-				case BombBox: stage[y][x] = Cell::BombBox; share.boxLimit[y][x] = MaxRounds; break;
+				case EmptyBox: stage[y][x] = Cell::BoxEmpty; share.boxLimit[y][x] = MaxRounds; break;
+				case RangeBox: stage[y][x] = Cell::BoxRange; share.boxLimit[y][x] = MaxRounds; break;
+				case BombBox: stage[y][x] = Cell::BoxBomb; share.boxLimit[y][x] = MaxRounds; break;
 				case Wall: stage[y][x] = Cell::Wall; break;
 				default: stage[y][x] = Cell::Empty; break;
 				}
@@ -440,18 +450,32 @@ public:
 				break;
 			case Bomb:
 				share.bomb.push_back(entitie);
-				share.bombLimit[entitie.pos] = entitie.val1; //カウント
-				share.bombTable[entitie.pos] = entitie.val2; //レンジ
 				break;
 			case Item:
 				share.item.push_back(entitie);
-				share.itemLimit[entitie.pos] = MaxRounds;
-				share.itemTable[entitie.pos] = entitie.val1;
 				break;
 			default:
 				break;
 			}
 
+		}
+
+		//テーブル初期化
+
+		share.bombLimit.fill(0);
+		share.bombTable.fill(0);
+		share.itemLimit.fill(0);
+		share.itemTable.fill(0);
+
+		for (const auto& bomb : share.bomb)
+		{
+			share.bombLimit[bomb.pos] = bomb.val1; //カウント
+			share.bombTable[bomb.pos] = bomb.val2; //レンジ
+		}
+		for (const auto& item : share.item)
+		{
+			share.itemLimit[item.pos] = Object::MaxRounds;
+			share.itemTable[item.pos] = item.val1;
 		}
 
 	}
@@ -462,8 +486,77 @@ public:
 
 #pragma region ユーティリティ
 
-const string MoveCommand = "MOVE ";
-const string BombCommand = "BOMB ";
+struct BitTable {
+	std::uint64_t bit[2];
+	static constexpr ptrdiff_t _Bitsperword = CHAR_BIT * sizeof(std::uint64_t);
+
+	BitTable& operator&=(const BitTable& other) noexcept {
+		bit[0] &= other.bit[0];
+		bit[1] &= other.bit[1];
+		return *this;
+	}
+
+	BitTable& operator|=(const BitTable& other) noexcept {
+		bit[0] |= other.bit[0];
+		bit[1] |= other.bit[1];
+		return *this;
+	}
+
+	BitTable& operator^=(const BitTable& other) noexcept {
+		bit[0] ^= other.bit[0];
+		bit[1] ^= other.bit[1];
+		return *this;
+	}
+
+	BitTable& flip() noexcept {
+		bit[0] = ~bit[0];
+		bit[1] = ~bit[1];
+		return *this;
+	}
+
+	BitTable& operator<<=(size_t pos) noexcept {
+		if (pos >= _Bitsperword) {
+			bit[1] = bit[0];
+			bit[0] = 0;
+		}
+
+		if ((pos %= _Bitsperword) != 0) {
+			bit[1] = (bit[1] << pos) | (bit[0] >> (_Bitsperword - pos));
+			bit[0] <<= pos;
+		}
+
+		return *this;
+	}
+	BitTable& operator>>=(size_t pos) noexcept {
+		if (pos >= _Bitsperword) {
+			bit[0] = bit[1];
+			bit[1] = 0;
+		}
+
+		if ((pos %= _Bitsperword) != 0) {
+			bit[0] = (bit[0] >> pos) | (bit[1] << (_Bitsperword - pos));
+			bit[1] >>= pos;
+		}
+
+		return *this;
+	}
+
+	BitTable& set() noexcept {
+		std::memset(bit, 0xFF, sizeof(bit));
+		return *this;
+	}
+	BitTable& reset() noexcept {
+		std::memset(bit, 0xFF, sizeof(bit));
+		return *this;
+	}
+	[[nodiscard]] BitTable operator&(const BitTable& other) const noexcept { return (*this) & other; }
+	[[nodiscard]] BitTable operator|(const BitTable& other) const noexcept { return (*this) | other; }
+	[[nodiscard]] BitTable operator^(const BitTable& other) const noexcept { return (*this) ^ other; }
+	[[nodiscard]] BitTable operator>>(size_t pos) const noexcept { return BitTable(*this) >>= pos; }
+	[[nodiscard]] BitTable operator<<(size_t pos) const noexcept { return BitTable(*this) <<= pos; }
+	[[nodiscard]] BitTable operator~() const noexcept { return BitTable(*this).flip(); }
+
+};
 
 const string format() {
 	return "";
@@ -471,7 +564,17 @@ const string format() {
 
 namespace Command {
 
+	const string MoveCommandStr = "MOVE ";
+	const string BombCommandStr = "BOMB ";
+
+	const string move(const int x, const int y) { return MoveCommandStr + to_string(x) + " " + to_string(y); }
+	const string move(const Point& pos) { return MoveCommandStr + to_string(pos.x) + " " + to_string(pos.y); }
+
+	const string bomb(const int x, const int y) { return BombCommandStr + to_string(x) + " " + to_string(y); }
+	const string bomb(const Point& pos) { return BombCommandStr + to_string(pos.x) + " " + to_string(pos.y); }
 }
+
+bool inside(const int x, const int y) { return (0 <= x && x < Object::Width && 0 <= y && y < Object::Height); }
 
 #pragma endregion
 
@@ -481,14 +584,150 @@ struct Data {
 
 };
 
-class Simulator {
+class Engine {
 private:
 
+	inline static FixedGrid<Object::Cell> stage;
+
+	FixedGrid<bool> box;
+	FixedGrid<bool> item;
+	FixedGrid<std::uint8_t> bomb;//0xf0:カウント　0x0f:範囲
+	FixedGrid<bool> blast;
+
 public:
+
+	static void Setup() {
+		stage = Share::Get().getStage();
+	}
+
+	Engine() {
+		box.fill(false);
+		item.fill(false);
+		bomb.fill(0);
+		blast.fill(false);
+	}
+
+	Engine(const FixedGrid<bool>& box, const FixedGrid<bool>& item, const FixedGrid<std::uint8_t>& bomb) {
+		this->box = box;
+		this->item = item;
+		this->bomb = bomb;
+		blast.fill(false);
+	}
+
+	Engine nextEngine() const {
+
+		Engine next(box, item, bomb);
+
+		queue<Point> que;
+
+		//更新処理
+		const auto tableUpdate = [&](const Point& pos) {
+
+			//ボックス更新処理
+			if (box[pos])
+			{
+				//アイテムボックスからアイテムを生成
+				if (stage[pos] != Object::Cell::BoxEmpty)
+				{
+					next.item[pos] = true;
+				}
+
+				//次ターンからボックス削除
+				next.box[pos] = false;
+				return true;
+			}
+
+			//ボム誘爆処理
+			if (next.bomb[pos])
+			{
+				//ボムの寿命を更新
+				next.bomb[pos] &= 0x1F;
+				que.push(pos);
+				return true;
+			}
+
+			//アイテム更新処理
+			if (next.item[pos])
+			{
+				//次ターンからアイテム削除
+				next.item[pos] = false;
+				return true;
+			}
+			return false;
+		};
+
+		forange_type(int, y, Object::Height)
+		{
+			forange_type(int, x, Object::Width)
+			{
+				if ((next.bomb[y][x] & 0xF0) == 0x10)
+				{
+					que.push(Point(x, y));
+				}
+			}
+		}
+
+		while (!que.empty())
+		{
+			const Point pos = que.front();
+			que.pop();
+
+			next.blast[pos] = true;
+			const auto range = (bomb[pos] & 0x0F);
+
+			//上
+			forstep_type(int, dy, pos.y - 1, max(pos.y - range, 0))
+			{
+				const Point updatePos(pos.x, dy);
+				next.blast[updatePos] = true;
+				if (tableUpdate(updatePos)) break;
+			}
+			//下
+			forstep_type(int, dy, pos.y + 1, min(pos.y + range, Object::Height - 1))
+			{
+				const Point updatePos(pos.x, dy);
+				next.blast[updatePos] = true;
+				if (tableUpdate(updatePos)) break;
+			}
+
+			//左
+			forstep_type(int, dx, pos.x - 1, max(pos.x - range, 0))
+			{
+				const Point updatePos(dx, pos.y);
+				next.blast[updatePos] = true;
+				if (tableUpdate(updatePos)) break;
+			}
+			//右
+			forstep_type(int, dx, pos.x + 1, min(pos.x + range, Object::Width - 1))
+			{
+				const Point updatePos(dx, pos.y);
+				next.blast[updatePos] = true;
+				if (tableUpdate(updatePos)) break;
+			}
+		}
+
+		//カウントダウン
+		forange_type(int, y, Object::Height)
+		{
+			forange_type(int, x, Object::Width)
+			{
+				if ((next.bomb[y][x] & 0xF0) > 0)
+				{
+					next.bomb[y][x] -= 0x10;
+				}
+			}
+		}
+
+		return next;
+	}
 
 };
 
 class AI {
+private:
+
+
+
 public:
 
 	vector<string> think() {
