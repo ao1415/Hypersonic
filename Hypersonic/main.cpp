@@ -13,8 +13,6 @@
 #include <algorithm>
 #include <memory>
 
-#include <bitset>
-
 using namespace std;
 
 #define forange(counter, end) forstep(counter, 0, end)
@@ -130,8 +128,6 @@ public:
 	bool outside(size_t x, size_t y) const { return (0 > x || x >= Width || 0 > y || y >= Height); }
 
 	void fill(const Type& v) noexcept { std::fill_n(m_data, Width * Height, v); }
-
-	void clear() { fill(ContainerType()); }
 
 };
 
@@ -335,20 +331,20 @@ public:
 
 	//以下に必要なgetterを記載
 
-	const auto getMyid() { return myid; }
-	const auto& getStage() { return stage; }
-	const auto& getBoxLimit() { return boxLimit; }
-	const auto& getBombLimit() { return bombLimit; }
-	const auto& getItemLimit() { return itemLimit; }
+	const auto getMyid() const { return myid; }
+	const auto& getStage() const { return stage; }
+	const auto& getBoxLimit() const { return boxLimit; }
+	const auto& getBombLimit() const { return bombLimit; }
+	const auto& getItemLimit() const { return itemLimit; }
 
-	const auto& getBombTable() { return bombTable; }
-	const auto& getItemTable() { return itemTable; }
+	const auto& getBombTable() const { return bombTable; }
+	const auto& getItemTable() const { return itemTable; }
 
-	const auto& getMy() { return my; }
-	const auto& getEnemy() { return enemy; }
+	const auto& getMy() const { return my; }
+	const auto& getEnemy() const { return enemy; }
 
-	const auto& getBomb() { return bomb; }
-	const auto& getItem() { return item; }
+	const auto& getBomb() const { return bomb; }
+	const auto& getItem() const { return item; }
 
 private:
 
@@ -445,7 +441,7 @@ public:
 			switch (type)
 			{
 			case Player:
-				if (owner = share.myid) share.my = entitie;
+				if (owner == share.myid) share.my = entitie;
 				else share.enemy.push_back(entitie);
 				break;
 			case Bomb:
@@ -486,80 +482,13 @@ public:
 
 #pragma region ユーティリティ
 
-struct BitTable {
-	std::uint64_t bit[2];
-	static constexpr ptrdiff_t _Bitsperword = CHAR_BIT * sizeof(std::uint64_t);
-
-	BitTable& operator&=(const BitTable& other) noexcept {
-		bit[0] &= other.bit[0];
-		bit[1] &= other.bit[1];
-		return *this;
-	}
-
-	BitTable& operator|=(const BitTable& other) noexcept {
-		bit[0] |= other.bit[0];
-		bit[1] |= other.bit[1];
-		return *this;
-	}
-
-	BitTable& operator^=(const BitTable& other) noexcept {
-		bit[0] ^= other.bit[0];
-		bit[1] ^= other.bit[1];
-		return *this;
-	}
-
-	BitTable& flip() noexcept {
-		bit[0] = ~bit[0];
-		bit[1] = ~bit[1];
-		return *this;
-	}
-
-	BitTable& operator<<=(size_t pos) noexcept {
-		if (pos >= _Bitsperword) {
-			bit[1] = bit[0];
-			bit[0] = 0;
-		}
-
-		if ((pos %= _Bitsperword) != 0) {
-			bit[1] = (bit[1] << pos) | (bit[0] >> (_Bitsperword - pos));
-			bit[0] <<= pos;
-		}
-
-		return *this;
-	}
-	BitTable& operator>>=(size_t pos) noexcept {
-		if (pos >= _Bitsperword) {
-			bit[0] = bit[1];
-			bit[1] = 0;
-		}
-
-		if ((pos %= _Bitsperword) != 0) {
-			bit[0] = (bit[0] >> pos) | (bit[1] << (_Bitsperword - pos));
-			bit[1] >>= pos;
-		}
-
-		return *this;
-	}
-
-	BitTable& set() noexcept {
-		std::memset(bit, 0xFF, sizeof(bit));
-		return *this;
-	}
-	BitTable& reset() noexcept {
-		std::memset(bit, 0xFF, sizeof(bit));
-		return *this;
-	}
-	[[nodiscard]] BitTable operator&(const BitTable& other) const noexcept { return (*this) & other; }
-	[[nodiscard]] BitTable operator|(const BitTable& other) const noexcept { return (*this) | other; }
-	[[nodiscard]] BitTable operator^(const BitTable& other) const noexcept { return (*this) ^ other; }
-	[[nodiscard]] BitTable operator>>(size_t pos) const noexcept { return BitTable(*this) >>= pos; }
-	[[nodiscard]] BitTable operator<<(size_t pos) const noexcept { return BitTable(*this) <<= pos; }
-	[[nodiscard]] BitTable operator~() const noexcept { return BitTable(*this).flip(); }
-
-};
-
 const string format() {
 	return "";
+}
+
+ostream& operator<<(ostream& os, const Point& p) {
+	os << "(" << p.x << ", " << p.y << ")";
+	return os;
 }
 
 namespace Command {
@@ -575,6 +504,12 @@ namespace Command {
 }
 
 bool inside(const int x, const int y) { return (0 <= x && x < Object::Width && 0 <= y && y < Object::Height); }
+bool inside(const Point& p) { return (0 <= p.x && p.x < Object::Width && 0 <= p.y && p.y < Object::Height); }
+
+template<class T>
+void debug(const T& mes) {
+	cerr << mes << endl;
+}
 
 #pragma endregion
 
@@ -596,8 +531,30 @@ private:
 
 public:
 
-	static void Setup() {
-		stage = Share::Get().getStage();
+	static Engine Create() {
+
+		const auto& share = Share::Get();
+		stage = share.getStage();
+		const auto& boxLimit = share.getBoxLimit();
+		const auto& itemLimit = share.getItemLimit();
+
+		const auto& bombLimit = share.getBombLimit();
+		const auto& bombTable = share.getBombTable();
+
+		Engine engine;
+
+		forange_type(int, y, Object::Height)
+		{
+			forange_type(int, x, Object::Width)
+			{
+				const auto& cell = stage[y][x];
+				engine.box[y][x] = (boxLimit[y][x] != 0);
+				engine.item[y][x] = (itemLimit[y][x] != 0);
+				engine.bomb[y][x] = (static_cast<std::uint8_t>(bombLimit[y][x] << 4) | (bombTable[y][x] & 0x0F));
+			}
+		}
+
+		return engine;
 	}
 
 	Engine() {
@@ -638,10 +595,10 @@ public:
 			}
 
 			//ボム誘爆処理
-			if (next.bomb[pos])
+			if ((next.bomb[pos] & 0xF0) > 0)
 			{
 				//ボムの寿命を更新
-				next.bomb[pos] &= 0x1F;
+				next.bomb[pos] &= 0x0F;
 				que.push(pos);
 				return true;
 			}
@@ -662,6 +619,7 @@ public:
 			{
 				if ((next.bomb[y][x] & 0xF0) == 0x10)
 				{
+					next.bomb[y][x] &= 0x0F;
 					que.push(Point(x, y));
 				}
 			}
@@ -673,17 +631,17 @@ public:
 			que.pop();
 
 			next.blast[pos] = true;
-			const auto range = (bomb[pos] & 0x0F);
+			const auto range = next.bomb[pos];
 
 			//上
-			forstep_type(int, dy, pos.y - 1, max(pos.y - range, 0))
+			for (int dy = pos.y - 1, end = max(pos.y - range, 0); dy >= end; dy--)
 			{
 				const Point updatePos(pos.x, dy);
 				next.blast[updatePos] = true;
 				if (tableUpdate(updatePos)) break;
 			}
 			//下
-			forstep_type(int, dy, pos.y + 1, min(pos.y + range, Object::Height - 1))
+			for (int dy = pos.y + 1, end = min(pos.y + range, Object::Height - 1); dy <= end; dy++)
 			{
 				const Point updatePos(pos.x, dy);
 				next.blast[updatePos] = true;
@@ -691,14 +649,14 @@ public:
 			}
 
 			//左
-			forstep_type(int, dx, pos.x - 1, max(pos.x - range, 0))
+			for (int dx = pos.x - 1, end = max(pos.x - range, 0); dx >= end; dx--)
 			{
 				const Point updatePos(dx, pos.y);
 				next.blast[updatePos] = true;
 				if (tableUpdate(updatePos)) break;
 			}
 			//右
-			forstep_type(int, dx, pos.x + 1, min(pos.x + range, Object::Width - 1))
+			for (int dx = pos.x + 1, end = min(pos.x + range, Object::Width - 1); dx <= end; dx++)
 			{
 				const Point updatePos(dx, pos.y);
 				next.blast[updatePos] = true;
@@ -721,18 +679,39 @@ public:
 		return next;
 	}
 
+	bool isBlast(const Point& pos) const {
+		return blast[pos];
+	}
+
 };
 
 class AI {
 private:
 
-
+	inline static const Point dist[5] = { Point(1,0),Point(0,1),Point(-1,0),Point(0,-1),Point(0,0) };
 
 public:
 
-	vector<string> think() {
+	string think() {
 
-		return { "WAIT","詰みです(´・ω・`)" };
+		const auto& share = Share::Get();
+		const Entitie my = share.getMy();
+
+		const Engine engine = Engine::Create();
+
+		const auto& next = engine.nextEngine();
+
+		for (const auto& d : dist)
+		{
+			const Point pos = my.pos + d;
+
+			if (inside(pos) && !next.isBlast(pos))
+			{
+				return Command::move(pos);
+			}
+		}
+
+		return "WAIT 詰みです(´・ω・`)";
 	}
 
 };
@@ -758,19 +737,12 @@ int main() {
 
 		sw.start();
 		const auto& coms = ai.think();
+		//const auto& coms = "WAIT";
 		sw.stop();
 
+		cout << coms << endl;
+
 		cerr << sw.toString_ms() << endl;
-
-		string command = "";
-		for (const auto& com : coms)
-		{
-			command += com + " ";
-		}
-		command.pop_back();
-
-		cout << command << endl;
-
 	}
 
 	return 0;
