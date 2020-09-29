@@ -580,6 +580,12 @@ public:
 		//更新処理
 		const auto tableUpdate = [&](const Point& pos) {
 
+			//壁更新処理
+			if (stage[pos] == Object::Cell::Wall)
+			{
+				return true;
+			}
+
 			//ボックス更新処理
 			if (box[pos])
 			{
@@ -679,8 +685,21 @@ public:
 		return next;
 	}
 
-	bool isBlast(const Point& pos) const {
-		return blast[pos];
+	bool isBlast(const Point& pos) const { return blast[pos]; }
+	bool isWall(const Point& pos) const { return (stage[pos] == Object::Cell::Wall); }
+	bool isBox(const Point& pos) const { return (box[pos]); }
+
+	void debug() const {
+
+		forange(y, Object::Height)
+		{
+			forange(x, Object::Width)
+			{
+				cerr << blast[y][x];
+			}
+			cerr << endl;
+		}
+
 	}
 
 };
@@ -705,8 +724,23 @@ public:
 		{
 			const Point pos = my.pos + d;
 
-			if (inside(pos) && !next.isBlast(pos))
+			if (inside(pos))
 			{
+				if (next.isBlast(pos))
+				{
+					continue;
+				}
+
+				if (engine.isWall(pos))
+				{
+					continue;
+				}
+
+				if (engine.isBox(pos))
+				{
+					continue;
+				}
+
 				return Command::move(pos);
 			}
 		}
@@ -730,14 +764,16 @@ int main() {
 	Stopwatch sw;
 
 	AI ai;
+	int turn = 0;
 
 	while (true)
 	{
 		input.loop();
+		cerr << "TURN:" << turn << endl;
+		turn++;
 
 		sw.start();
 		const auto& coms = ai.think();
-		//const auto& coms = "WAIT";
 		sw.stop();
 
 		cout << coms << endl;
